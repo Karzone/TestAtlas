@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- The loadable half of the broken-solution fixture. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Broken.Good</RootNamespace>
+    <AssemblyName>Broken.Good</AssemblyName>
+  </PropertyGroup>
+
+</Project>

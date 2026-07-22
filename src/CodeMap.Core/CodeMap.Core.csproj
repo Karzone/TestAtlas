@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Project folder is CodeMap.Core, but the shipped identity is TestAtlas.Core.
+    (Working name "CodeMap" survives in the spec + CLI verb; the package/namespace is TestAtlas.*.)
+  -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TestAtlas.Core</RootNamespace>
+    <AssemblyName>TestAtlas.Core</AssemblyName>
+    <PackageId>TestAtlas.Core</PackageId>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Roslyn: MSBuildWorkspace loads the solution; CSharp.Workspaces gives syntax/semantic models. -->
+    <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.11.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.11.0" />
+    <!-- SQLite map writer. -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+  </ItemGroup>
+
+</Project>

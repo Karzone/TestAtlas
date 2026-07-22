@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Fixture input for TestAtlas tests. NOT part of TestAtlas.sln; loaded by the indexer at
+       test time. SpecFlow attributes are local shims (real TechTalk.SpecFlow namespace) so the
+       fixture needs no packages and stays offline + deterministic. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Fixture.SpecFlow</RootNamespace>
+    <AssemblyName>Fixture.SpecFlow</AssemblyName>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="Features\**\*.feature" />
+  </ItemGroup>
+
+</Project>

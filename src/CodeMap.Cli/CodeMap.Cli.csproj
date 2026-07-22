@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Thin CLI wrapper over TestAtlas.Core. Packs as a dotnet tool: `testatlas`. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TestAtlas.Cli</RootNamespace>
+    <AssemblyName>TestAtlas.Cli</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>testatlas</ToolCommandName>
+    <PackageId>TestAtlas.Cli</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CodeMap.Core\CodeMap.Core.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,30 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-test:
+    name: Build & test (.NET 8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Only the product solution is restored/built. The fixture solutions under tests/fixtures
+      # are inputs to the indexer (loaded by MSBuildWorkspace at test time), not part of the build.
+      - name: Restore
+        run: dotnet restore TestAtlas.sln
+
+      - name: Build
+        run: dotnet build TestAtlas.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test TestAtlas.sln --configuration Release --no-build --verbosity normal

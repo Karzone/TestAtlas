@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- DELIBERATELY UNLOADABLE: the XML below is malformed (the <ItemGroup> is never closed), so
+       MSBuild cannot even parse the project and MSBuildWorkspace fails to load it. Exercises
+       partial-load: the map is still written for Broken.Good, exit code is 1, and a diagnostic is
+       recorded (spec A5). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+
+</Project>

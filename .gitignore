@@ -1,0 +1,17 @@
+# .NET build output
+bin/
+obj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+.vs/
+
+# Test / tool artifacts
+*.db
+TestResults/
+[Tt]est[Rr]esults/
+
+# OS
+.DS_Store
+Thumbs.db

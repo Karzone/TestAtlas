@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Reqnroll-flavoured fixture (real Reqnroll namespace shims) sitting side-by-side with the
+       SpecFlow one, proving both BDD dialects index in a single run (spec A4). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <RootNamespace>Fixture.Reqnroll</RootNamespace>
+    <AssemblyName>Fixture.Reqnroll</AssemblyName>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="Features\**\*.feature" />
+  </ItemGroup>
+
+</Project>
