@@ -156,6 +156,31 @@ public sealed class HtmlReportBuilderTests
     }
 
     [Fact]
+    public void Panels_are_collapsible_and_features_default_collapsed()
+    {
+        var html = HtmlReportBuilder.Build(Doc()); // has a coverage panel and a Login feature
+
+        // Top-level panels are <details> so they can be folded away.
+        Assert.Contains("<details class=\"panel\" open>", html);
+        // Feature entries default COLLAPSED (no `open`) so a large report is scannable.
+        Assert.Contains("<details class=\"feature\">", html);
+        Assert.DoesNotContain("<details class=\"feature\" open>", html);
+        // Bulk controls exist.
+        Assert.Contains("expand all", html);
+        Assert.Contains("collapse all", html);
+        Assert.Contains("setAllFeatures", html);
+    }
+
+    [Fact]
+    public void Feature_summary_shows_an_unbound_badge_when_a_step_is_unbound()
+    {
+        // Doc()'s "Login <b>" feature contains the unbound "pigs can fly" step.
+        var html = HtmlReportBuilder.Build(Doc());
+        Assert.Contains("badge unbound", html);
+        Assert.Contains("1 unbound", html); // the per-feature count in the collapsed summary
+    }
+
+    [Fact]
     public void Handles_an_empty_map_without_throwing()
     {
         var html = HtmlReportBuilder.Build(new MapDocument { UserVersion = MapSchema.Version });

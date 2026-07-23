@@ -90,7 +90,7 @@ public static class HtmlReportBuilder
         sb.Append("</section>");
 
         // ---- binding coverage ---------------------------------------------------------------
-        sb.Append("<section class=\"panel\"><h2>Step binding coverage</h2>");
+        sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>Step binding coverage</h2></summary>");
         sb.Append("<div class=\"coverage\">");
         sb.Append("<div class=\"cov-num\">").Append(coveragePct).Append("<span>%</span></div>");
         sb.Append("<div class=\"cov-body\">");
@@ -103,7 +103,7 @@ public static class HtmlReportBuilder
         LegendItem(sb, "bound", boundCount, "resolve to exactly one step definition");
         LegendItem(sb, "ambiguous", ambiguousCount, "match more than one step definition");
         LegendItem(sb, "unbound", unboundCount, "no step definition matches");
-        sb.Append("</ul></div></div></section>");
+        sb.Append("</ul></div></div></details>");
 
         // ---- class kinds --------------------------------------------------------------------
         var kindGroups = doc.Classes.GroupBy(c => c.Kind)
@@ -112,7 +112,7 @@ public static class HtmlReportBuilder
         if (kindGroups.Count > 0)
         {
             var maxKind = kindGroups.Max(g => g.Count);
-            sb.Append("<section class=\"panel\"><h2>Class kinds</h2><div class=\"kinds\">");
+            sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>Class kinds</h2></summary><div class=\"kinds\">");
             foreach (var g in kindGroups)
             {
                 var w = maxKind == 0 ? 0 : (int)Math.Round(100.0 * g.Count / maxKind);
@@ -120,11 +120,11 @@ public static class HtmlReportBuilder
                 sb.Append("<span class=\"kind-track\"><span class=\"kind-fill\" style=\"width:").Append(w).Append("%\"></span></span>");
                 sb.Append("<span class=\"kind-count\">").Append(g.Count).Append("</span></div>");
             }
-            sb.Append("</div></section>");
+            sb.Append("</div></details>");
         }
 
         // ---- per-project table --------------------------------------------------------------
-        sb.Append("<section class=\"panel\"><h2>Projects</h2><table class=\"grid\"><thead><tr>");
+        sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>Projects</h2></summary><table class=\"grid\"><thead><tr>");
         foreach (var h in new[] { "project", "kind", "classes", "methods", "features", "scenarios", "steps" })
             sb.Append("<th>").Append(h).Append("</th>");
         sb.Append("</tr></thead><tbody>");
@@ -142,7 +142,7 @@ public static class HtmlReportBuilder
             Num(sb, steps);
             sb.Append("</tr>");
         }
-        sb.Append("</tbody></table></section>");
+        sb.Append("</tbody></table></details>");
 
         // ---- collaborators (page objects / API clients + who drives them) -------------------
         AppendCollaborators(sb, doc);
@@ -150,9 +150,16 @@ public static class HtmlReportBuilder
         // ---- feature / scenario / step drill-down -------------------------------------------
         if (doc.Features.Count > 0)
         {
-            sb.Append("<section class=\"panel\"><div class=\"panel-head\"><h2>Features</h2>");
+            sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>Features</h2>");
+            sb.Append("<span class=\"subtle\">").Append(doc.Features.Count).Append(" feature")
+              .Append(doc.Features.Count == 1 ? "" : "s").Append(" · ").Append(doc.Scenarios.Count)
+              .Append(" scenario").Append(doc.Scenarios.Count == 1 ? "" : "s").Append("</span></summary>");
+            sb.Append("<div class=\"tree-controls\">");
             sb.Append("<input id=\"filter\" type=\"search\" placeholder=\"filter features, scenarios, steps…\" ")
-              .Append("oninput=\"filterTree(this.value)\" autocomplete=\"off\"></div>");
+              .Append("oninput=\"filterTree(this.value)\" autocomplete=\"off\">");
+            sb.Append("<button type=\"button\" class=\"mini\" onclick=\"setAllFeatures(true)\">expand all</button>");
+            sb.Append("<button type=\"button\" class=\"mini\" onclick=\"setAllFeatures(false)\">collapse all</button>");
+            sb.Append("</div>");
             sb.Append("<div id=\"tree\">");
 
             var scenariosByFeature = doc.Scenarios.GroupBy(s => s.FeatureId)
@@ -164,10 +171,18 @@ public static class HtmlReportBuilder
             {
                 scenariosByFeature.TryGetValue(feature.Id, out var scen);
                 scen ??= new List<ScenarioRow>();
-                sb.Append("<details class=\"feature\" open><summary>");
+
+                // Per-feature binding health, so a collapsed feature still shows if it has gaps.
+                var featUnbound = scen
+                    .SelectMany(s => stepsByScenario.TryGetValue(s.Id, out var st) ? st : Enumerable.Empty<ScenarioStepRow>())
+                    .Count(st => (binding.TryGetValue(st.Id, out var bv) ? bv.Status : BindStatus.Unbound) == BindStatus.Unbound);
+
+                sb.Append("<details class=\"feature\"><summary>");
                 sb.Append("<span class=\"f-name\">").Append(E(feature.Name)).Append("</span>");
                 sb.Append("<span class=\"f-meta\">").Append(scen.Count).Append(" scenario")
                   .Append(scen.Count == 1 ? "" : "s").Append("</span>");
+                if (featUnbound > 0)
+                    sb.Append("<span class=\"badge unbound\">").Append(featUnbound).Append(" unbound</span>");
                 if (!string.IsNullOrEmpty(feature.Tags))
                     sb.Append("<span class=\"tags\">").Append(E(feature.Tags!)).Append("</span>");
                 sb.Append("<span class=\"path\">").Append(E(feature.FilePath)).Append("</span>");
@@ -205,13 +220,14 @@ public static class HtmlReportBuilder
                 }
                 sb.Append("</details>");
             }
-            sb.Append("</div><p id=\"nomatch\" class=\"nomatch\" hidden>No steps match that filter.</p></section>");
+            sb.Append("</div><p id=\"nomatch\" class=\"nomatch\" hidden>No steps match that filter.</p></details>");
         }
 
         // ---- diagnostics --------------------------------------------------------------------
         if (doc.Diagnostics.Count > 0)
         {
-            sb.Append("<section class=\"panel\"><h2>Diagnostics</h2><table class=\"grid diag\"><thead><tr>");
+            sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>Diagnostics</h2><span class=\"subtle\">")
+              .Append(doc.Diagnostics.Count).Append("</span></summary><table class=\"grid diag\"><thead><tr>");
             foreach (var h in new[] { "severity", "code", "message", "location" })
                 sb.Append("<th>").Append(h).Append("</th>");
             sb.Append("</tr></thead><tbody>");
@@ -223,7 +239,7 @@ public static class HtmlReportBuilder
                 sb.Append("<td>").Append(E(d.Message)).Append("</td>");
                 sb.Append("<td class=\"mono dim\">").Append(E(d.Location ?? "")).Append("</td></tr>");
             }
-            sb.Append("</tbody></table></section>");
+            sb.Append("</tbody></table></details>");
         }
 
         sb.Append("<footer>Generated by TestAtlas — static semantic map for .NET test-automation solutions.</footer>");
@@ -304,11 +320,11 @@ public static class HtmlReportBuilder
             .ThenBy(x => x.Class.Name, StringComparer.Ordinal)
             .ToList();
 
-        sb.Append("<section class=\"panel\"><div class=\"panel-head\"><h2>Collaborators</h2>");
+        sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>Collaborators</h2>");
         sb.Append("<span class=\"subtle\">").Append(pageObjects).Append(" page object").Append(pageObjects == 1 ? "" : "s");
         if (apiClients > 0) sb.Append(" · ").Append(apiClients).Append(" API client").Append(apiClients == 1 ? "" : "s");
         if (orphans > 0) sb.Append(" · <span class=\"warn-text\">").Append(orphans).Append(" unused</span>");
-        sb.Append("</span></div>");
+        sb.Append("</span></summary>");
 
         sb.Append("<table class=\"grid\"><thead><tr>");
         foreach (var h in new[] { "collaborator", "kind", "driven by", "extends" })
@@ -330,7 +346,7 @@ public static class HtmlReportBuilder
         if (ranked.Count > MaxCollaboratorRows)
             sb.Append("<p class=\"subtle more\">… and ").Append(ranked.Count - MaxCollaboratorRows)
               .Append(" more (query the map db for the full list).</p>");
-        sb.Append("</section>");
+        sb.Append("</details>");
     }
 
     // ---- small emit helpers ------------------------------------------------------------------
@@ -386,6 +402,20 @@ public static class HtmlReportBuilder
         .panel-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
         h2{margin:0 0 14px;font-size:15px;font-weight:640;letter-spacing:.2px}
         .panel-head h2{margin:0}
+        details.panel>summary.p-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
+        details.panel>summary.p-sum::-webkit-details-marker{display:none}
+        details.panel>summary.p-sum h2{margin:0}
+        details.panel>summary.p-sum::before{content:"";width:6px;height:6px;flex:none;
+        border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);transform:rotate(-45deg)}
+        details.panel[open]>summary.p-sum{margin-bottom:14px}
+        details.panel[open]>summary.p-sum::before{transform:rotate(45deg)}
+        details.panel>summary.p-sum .subtle{margin-left:auto}
+        .tree-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+        button.mini{font:12px system-ui,sans-serif;padding:6px 11px;border:1px solid var(--line);border-radius:7px;
+        background:var(--bg);color:var(--dim);cursor:pointer}
+        button.mini:hover{color:var(--ink);border-color:var(--faint)}
+        .badge{font-size:11px;font-family:var(--mono);border-radius:20px;padding:1px 8px;border:1px solid}
+        .badge.unbound{color:var(--unbound);border-color:var(--unbound);background:color-mix(in srgb,var(--unbound) 10%,transparent)}
         .coverage{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
         .cov-num{font-size:44px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-1px;line-height:1}
         .cov-num span{font-size:20px;color:var(--dim);margin-left:2px}
@@ -478,7 +508,11 @@ public static class HtmlReportBuilder
             f.style.display=fVisible?'':'none';
             if(fVisible){anyVisible=true; if(q!=='')f.open=true;}
           });
+          if(q==='')setAllFeatures(false); // clearing the filter returns to the collapsed default
           document.getElementById('nomatch').hidden=anyVisible||q==='';
+        }
+        function setAllFeatures(open){
+          document.querySelectorAll('#tree > details.feature').forEach(function(f){f.open=open;});
         }
         """;
 }
