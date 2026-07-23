@@ -14,6 +14,12 @@ artifacts-nupkg/
 TestResults/
 [Tt]est[Rr]esults/
 *.html
+# ...except the committed sample outputs used in the README.
+!docs/sample-report.html
+!docs/sample-map.html
+
+# Reqnroll / SpecFlow generated code-behind (produced on build)
+*.feature.cs
 
 # OS
 .DS_Store

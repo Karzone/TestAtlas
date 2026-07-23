@@ -1,0 +1,152 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TestAtlas — SampleShop.sln</title><style>:root{--bg:#f6f7f9;--card:#fff;--ink:#1a1d21;--dim:#5b6470;--faint:#8b94a1;--line:#e4e7ec;
+--accent:#3b5bdb;--bound:#2f9e44;--amber:#e8890c;--unbound:#e03131;--mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1216;--card:#171b21;--ink:#e6e9ee;--dim:#9aa4b2;
+--faint:#6b7484;--line:#252b33;--accent:#748ffc;--bound:#51cf66;--amber:#ffa94d;--unbound:#ff6b6b;}}
+*{box-sizing:border-box}html{-webkit-text-size-adjust:100%}
+body{margin:0;font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+.top{background:linear-gradient(180deg,var(--card),transparent);border-bottom:1px solid var(--line);padding:28px 0 22px}
+.brand{font-weight:600;letter-spacing:.2px;color:var(--dim)}.brand span{color:var(--accent)}
+.brand .tag{color:var(--faint);font-weight:500;font-size:12px;text-transform:uppercase;letter-spacing:1px;margin-left:6px}
+h1{margin:10px 0 4px;font-size:26px;font-weight:650;letter-spacing:-.3px}
+.meta{margin:0;color:var(--faint);font-size:12.5px;font-family:var(--mono);word-break:break-all}
+main{padding:24px 24px 64px}
+.banner{background:color-mix(in srgb,var(--amber) 12%,var(--card));border:1px solid var(--amber);
+border-radius:10px;padding:12px 16px;margin:16px 0 4px;font-size:13.5px;line-height:1.55}
+.banner code{font-family:var(--mono);font-size:12px;background:var(--card);border:1px solid var(--line);
+border-radius:5px;padding:1px 6px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:8px 0 24px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.c-num{font-size:28px;font-weight:680;font-variant-numeric:tabular-nums;letter-spacing:-.5px}
+.c-label{color:var(--dim);font-size:12.5px;margin-top:2px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px 22px;margin:16px 0}
+.panel-head{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+h2{margin:0 0 14px;font-size:15px;font-weight:640;letter-spacing:.2px}
+.panel-head h2{margin:0}
+details.panel>summary.p-sum{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px}
+details.panel>summary.p-sum::-webkit-details-marker{display:none}
+details.panel>summary.p-sum h2{margin:0}
+details.panel>summary.p-sum::before{content:"";width:6px;height:6px;flex:none;
+border-right:2px solid var(--faint);border-bottom:2px solid var(--faint);transform:rotate(-45deg)}
+details.panel[open]>summary.p-sum{margin-bottom:14px}
+details.panel[open]>summary.p-sum::before{transform:rotate(45deg)}
+details.panel>summary.p-sum .subtle{margin-left:auto}
+.tree-controls{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+button.mini{font:12px system-ui,sans-serif;padding:6px 11px;border:1px solid var(--line);border-radius:7px;
+background:var(--bg);color:var(--dim);cursor:pointer}
+button.mini:hover{color:var(--ink);border-color:var(--faint)}
+.badge{font-size:11px;font-family:var(--mono);border-radius:20px;padding:1px 8px;border:1px solid}
+.badge.unbound{color:var(--unbound);border-color:var(--unbound);background:color-mix(in srgb,var(--unbound) 10%,transparent)}
+.coverage{display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.cov-num{font-size:44px;font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-1px;line-height:1}
+.cov-num span{font-size:20px;color:var(--dim);margin-left:2px}
+.cov-body{flex:1;min-width:260px}
+.bar{display:flex;height:14px;border-radius:8px;overflow:hidden;background:var(--line)}
+.seg{display:block;height:100%}.seg.bound{background:var(--bound)}.seg.ambiguous{background:var(--amber)}.seg.unbound{background:var(--unbound)}
+.legend{list-style:none;display:flex;gap:20px;flex-wrap:wrap;margin:12px 0 0;padding:0;font-size:13px}
+.legend b{font-variant-numeric:tabular-nums}
+.swatch{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:baseline}
+.swatch.bound{background:var(--bound)}.swatch.ambiguous{background:var(--amber)}.swatch.unbound{background:var(--unbound)}
+.lk{font-weight:600}.ld{color:var(--dim)}
+.kinds{display:flex;flex-direction:column;gap:8px}
+.kind-row{display:grid;grid-template-columns:150px 1fr 44px;align-items:center;gap:12px}
+.kind-label{font-size:13px;color:var(--dim);font-family:var(--mono)}
+.kind-track{background:var(--line);border-radius:6px;height:10px;overflow:hidden}
+.kind-fill{display:block;height:100%;background:var(--accent);border-radius:6px}
+.kind-count{text-align:right;font-variant-numeric:tabular-nums;font-size:13px;color:var(--dim)}
+table.grid{width:100%;border-collapse:collapse;font-size:13.5px}
+.grid th{text-align:left;color:var(--faint);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;
+padding:0 12px 8px;border-bottom:1px solid var(--line)}
+.grid td{padding:9px 12px;border-bottom:1px solid var(--line)}
+.grid tr:last-child td{border-bottom:0}
+.grid td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--dim)}
+.grid td.name{font-weight:600}
+.table-scroll{overflow-x:auto;max-width:100%}
+.grid.diag{table-layout:fixed}
+.grid.diag th:nth-child(1),.grid.diag td:nth-child(1){width:84px}
+.grid.diag th:nth-child(2),.grid.diag td:nth-child(2){width:180px}
+.grid.diag th:nth-child(4),.grid.diag td:nth-child(4){width:22%}
+.grid.diag td{overflow-wrap:anywhere;word-break:break-word;vertical-align:top}
+.chip{display:inline-block;font-size:11.5px;font-family:var(--mono);color:var(--dim);background:var(--bg);
+border:1px solid var(--line);border-radius:20px;padding:1px 9px}
+.chip.outline{color:var(--amber);border-color:var(--amber)}
+.chip.op{color:var(--accent);border-color:var(--accent)}
+.grid.ep th:nth-child(1),.grid.ep td:nth-child(1){width:64px}
+.grid.ep th:nth-child(3),.grid.ep td:nth-child(3){width:96px}
+.grid.ep td.num{width:110px}
+.ep-route{overflow-wrap:anywhere;word-break:break-word;color:var(--ink)}
+.verb{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.4px;
+border-radius:5px;padding:2px 6px;border:1px solid;min-width:44px;text-align:center}
+.verb.get{color:var(--bound);border-color:var(--bound);background:color-mix(in srgb,var(--bound) 10%,transparent)}
+.verb.post{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.verb.put{color:var(--amber);border-color:var(--amber);background:color-mix(in srgb,var(--amber) 10%,transparent)}
+.verb.patch{color:var(--amber);border-color:var(--amber);background:color-mix(in srgb,var(--amber) 8%,transparent)}
+.verb.delete{color:var(--unbound);border-color:var(--unbound);background:color-mix(in srgb,var(--unbound) 10%,transparent)}
+.verb.any{color:var(--faint);border-color:var(--line)}
+.subtle{color:var(--faint);font-size:12.5px}
+.warn-text{color:var(--amber);font-weight:600}
+.more{margin:10px 0 0}
+.tag-unused{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--amber);
+background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid var(--amber);
+border-radius:20px;padding:1px 9px}
+details.feature{border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden;background:var(--bg)}
+details.feature>summary{cursor:pointer;list-style:none;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
+background:var(--card)}
+details.feature>summary::-webkit-details-marker{display:none}
+.f-name{font-weight:550;font-size:14px}.f-meta{color:var(--faint);font-size:12.5px}
+.tags{font-family:var(--mono);font-size:11.5px;color:var(--accent)}
+.path{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);word-break:break-all}
+.scenario{padding:6px 14px 12px 20px;border-top:1px solid var(--line)}
+.s-head{display:flex;align-items:center;gap:10px;margin:10px 0 6px}
+.s-name{font-weight:600;font-size:13.5px}
+.steps{list-style:none;margin:0;padding:0}
+.step{display:flex;align-items:baseline;gap:8px;padding:5px 8px;border-radius:7px;font-size:13px;flex-wrap:wrap}
+.step+.step{margin-top:1px}
+.step .dot{width:7px;height:7px;border-radius:50%;flex:none;position:relative;top:1px}
+.step.bound .dot{background:var(--bound)}.step.ambiguous .dot{background:var(--amber)}.step.unbound .dot{background:var(--unbound)}
+.step.unbound{background:color-mix(in srgb,var(--unbound) 8%,transparent)}
+.step.ambiguous{background:color-mix(in srgb,var(--amber) 8%,transparent)}
+.kw{font-weight:700;color:var(--dim);font-size:12px;min-width:38px}
+.txt{color:var(--ink)}
+.binding{margin-left:auto;color:var(--dim);font-size:12px}
+.binding code{font-family:var(--mono);font-size:11.5px;background:var(--card);border:1px solid var(--line);
+border-radius:5px;padding:0 5px;color:var(--ink)}
+.binding .loc{color:var(--faint);font-family:var(--mono);font-size:11px;margin-left:4px}
+.step.unbound .binding{color:var(--unbound)}.step.ambiguous .binding{color:var(--amber)}
+#filter{font:13px system-ui,sans-serif;padding:7px 12px;border:1px solid var(--line);border-radius:8px;
+background:var(--bg);color:var(--ink);min-width:240px}
+#filter:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:transparent}
+.nomatch{color:var(--faint);font-size:13px;text-align:center;padding:16px}
+.sev{font-family:var(--mono);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px}
+.sev.error{color:var(--unbound)}.sev.warning{color:var(--amber)}.sev.info{color:var(--dim)}
+.mono{font-family:var(--mono);font-size:12px}.dim{color:var(--faint)}
+footer{color:var(--faint);font-size:12px;text-align:center;padding:8px 0}
+@media(max-width:720px){.kind-row{grid-template-columns:110px 1fr 38px}.path{display:none}.binding{margin-left:0;flex-basis:100%}}
+@media(prefers-reduced-motion:no-preference){.seg,.kind-fill{transition:width .4s ease}}</style></head><body><header class="top"><div class="wrap"><div class="brand">Test<span>Atlas</span> <span class="tag">map report</span></div><h1>SampleShop.sln</h1><p class="meta"><span title="samples/SampleShop/SampleShop.sln">samples/SampleShop/SampleShop.sln</span> · generated 2026-07-23T21:16:16Z · schema v4 · tool 1.0.0.0</p></div></header><main class="wrap"><section class="cards"><div class="card"><div class="c-num">4</div><div class="c-label">projects</div></div><div class="card"><div class="c-num">13</div><div class="c-label">classes</div></div><div class="card"><div class="c-num">48</div><div class="c-label">methods</div></div><div class="card"><div class="c-num">8</div><div class="c-label">step definitions</div></div><div class="card"><div class="c-num">2</div><div class="c-label">features</div></div><div class="card"><div class="c-num">3</div><div class="c-label">scenarios</div></div><div class="card"><div class="c-num">9</div><div class="c-label">scenario steps</div></div><div class="card"><div class="c-num">1</div><div class="c-label">API endpoints</div></div></section><details class="panel" open><summary class="p-sum"><h2>Step binding coverage</h2></summary><div class="coverage"><div class="cov-num">100<span>%</span></div><div class="cov-body"><div class="bar"><span class="seg bound" style="width:100%" title="9 bound"></span></div><ul class="legend"><li><span class="swatch bound"></span><b>9</b> <span class="lk">bound</span> <span class="ld">resolve to exactly one step definition</span></li><li><span class="swatch ambiguous"></span><b>0</b> <span class="lk">ambiguous</span> <span class="ld">match more than one step definition</span></li><li><span class="swatch unbound"></span><b>0</b> <span class="lk">unbound</span> <span class="ld">no step definition matches</span></li></ul></div></div></details><details class="panel" open><summary class="p-sum"><h2>Class kinds</h2></summary><div class="kinds"><div class="kind-row"><span class="kind-label">other</span><span class="kind-track"><span class="kind-fill" style="width:100%"></span></span><span class="kind-count">11</span></div><div class="kind-row"><span class="kind-label">step_class</span><span class="kind-track"><span class="kind-fill" style="width:18%"></span></span><span class="kind-count">2</span></div></div></details><details class="panel" open><summary class="p-sum"><h2>Projects</h2></summary><table class="grid"><thead><tr><th>project</th><th>kind</th><th>classes</th><th>methods</th><th>features</th><th>scenarios</th><th>steps</th></tr></thead><tbody><tr><td class="name">SampleShop.ApiClients</td><td><span class="chip">shared_library</span></td><td class="num">2</td><td class="num">4</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr><tr><td class="name">SampleShop.Core</td><td><span class="chip">shared_library</span></td><td class="num">2</td><td class="num">5</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr><tr><td class="name">SampleShop.PageObjects</td><td><span class="chip">shared_library</span></td><td class="num">2</td><td class="num">5</td><td class="num">0</td><td class="num">0</td><td class="num">0</td></tr><tr><td class="name">SampleShop.Tests</td><td><span class="chip">bdd_tests</span></td><td class="num">7</td><td class="num">34</td><td class="num">2</td><td class="num">3</td><td class="num">9</td></tr></tbody></table></details><details class="panel" open><summary class="p-sum"><h2>API endpoints</h2><span class="subtle">1 route</span></summary><div class="table-scroll"><table class="grid ep"><thead><tr><th>verb</th><th>endpoint</th><th>kind</th><th>call sites</th><th>scenarios</th></tr></thead><tbody><tr><td><span class="verb get">GET</span></td><td class="mono ep-route">products/{id}</td><td><span class="chip">route</span></td><td class="num">1</td><td><span class="tag-unused">none bound</span></td></tr></tbody></table></div></details><details class="panel" open><summary class="p-sum"><h2>Features</h2><span class="subtle">2 features · 3 scenarios</span></summary><div class="tree-controls"><input id="filter" type="search" placeholder="filter features, scenarios, steps…" oninput="filterTree(this.value)" autocomplete="off"><button type="button" class="mini" onclick="setAllFeatures(true)">expand all</button><button type="button" class="mini" onclick="setAllFeatures(false)">collapse all</button></div><div id="tree"><details class="feature"><summary><span class="f-name">Checkout</span><span class="f-meta">1 scenario</span><span class="path">SampleShop.Tests/Features/Checkout.feature</span></summary><div class="scenario"><div class="s-head"><span class="s-name">Place an order as a signed-in customer</span></div><ul class="steps"><li class="step bound"><span class="dot"></span><span class="kw">Given</span> <span class="txt">the customer &quot;ada@example.com&quot; is signed in</span><span class="binding">→ <code>the customer &quot;(.*)&quot; is signed in</code> <span class="loc">CheckoutSteps.cs:16</span></span></li><li class="step bound"><span class="dot"></span><span class="kw">When</span> <span class="txt">they check out with shipping address &quot;1 King Street&quot;</span><span class="binding">→ <code>they check out with shipping address &quot;(.*)&quot;</code> <span class="loc">CheckoutSteps.cs:24</span></span></li><li class="step bound"><span class="dot"></span><span class="kw">Then</span> <span class="txt">the order is placed</span><span class="binding">→ <code>the order is placed</code> <span class="loc">CheckoutSteps.cs:33</span></span></li></ul></div></details><details class="feature"><summary><span class="f-name">Product API</span><span class="f-meta">2 scenarios</span><span class="path">SampleShop.Tests/Features/ProductApi.feature</span></summary><div class="scenario"><div class="s-head"><span class="s-name">List available products</span></div><ul class="steps"><li class="step bound"><span class="dot"></span><span class="kw">Given</span> <span class="txt">the shop API is available</span><span class="binding">→ <code>the shop API is available</code> <span class="loc">ProductApiSteps.cs:18</span></span></li><li class="step bound"><span class="dot"></span><span class="kw">When</span> <span class="txt">a request for the product list is made</span><span class="binding">→ <code>a request for the product list is made</code> <span class="loc">ProductApiSteps.cs:25</span></span></li><li class="step bound"><span class="dot"></span><span class="kw">Then</span> <span class="txt">the product list is returned</span><span class="binding">→ <code>the product list is returned</code> <span class="loc">ProductApiSteps.cs:37</span></span></li></ul></div><div class="scenario"><div class="s-head"><span class="s-name">Add a product to the cart</span></div><ul class="steps"><li class="step bound"><span class="dot"></span><span class="kw">Given</span> <span class="txt">the shop API is available</span><span class="binding">→ <code>the shop API is available</code> <span class="loc">ProductApiSteps.cs:18</span></span></li><li class="step bound"><span class="dot"></span><span class="kw">When</span> <span class="txt">product 42 is added to the cart with quantity 2</span><span class="binding">→ <code>product (.*) is added to the cart with quantity (.*)</code> <span class="loc">ProductApiSteps.cs:31</span></span></li><li class="step bound"><span class="dot"></span><span class="kw">Then</span> <span class="txt">the cart contains 1 line item</span><span class="binding">→ <code>the cart contains (.*) line item</code> <span class="loc">ProductApiSteps.cs:43</span></span></li></ul></div></details></div><p id="nomatch" class="nomatch" hidden>No steps match that filter.</p></details><footer>Generated by TestAtlas — static semantic map for .NET test-automation solutions.</footer></main><script>function filterTree(q){
+  q=(q||'').trim().toLowerCase();
+  var features=document.querySelectorAll('#tree > details.feature');
+  var anyVisible=false;
+  features.forEach(function(f){
+    var fVisible=false;
+    f.querySelectorAll('.scenario').forEach(function(sc){
+      var scText=sc.textContent.toLowerCase();
+      var scVisible=false;
+      sc.querySelectorAll('.step').forEach(function(st){
+        var hit=q===''||st.textContent.toLowerCase().indexOf(q)>-1;
+        st.style.display=hit?'':'none';
+        if(hit)scVisible=true;
+      });
+      // a scenario whose name matches keeps all its steps
+      if(q!==''&&scText.indexOf(q)>-1){sc.querySelectorAll('.step').forEach(function(st){st.style.display='';});scVisible=true;}
+      sc.style.display=scVisible?'':'none';
+      if(scVisible)fVisible=true;
+    });
+    f.style.display=fVisible?'':'none';
+    if(fVisible){anyVisible=true; if(q!=='')f.open=true;}
+  });
+  if(q==='')setAllFeatures(false); // clearing the filter returns to the collapsed default
+  document.getElementById('nomatch').hidden=anyVisible||q==='';
+}
+function setAllFeatures(open){
+  document.querySelectorAll('#tree > details.feature').forEach(function(f){f.open=open;});
+}</script></body></html>

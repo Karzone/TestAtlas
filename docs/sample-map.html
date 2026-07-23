@@ -1,0 +1,198 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>TestAtlas map — SampleShop.sln</title><style>:root{--bg:#f6f7f9;--ink:#1a1d21;--dim:#5b6470;--faint:#8b94a1;--line:#e4e7ec;--card:#fff;
+--bdd:#3b5bdb;--shared:#2f9e44;--unit:#e8890c;--other:#98a2b3;--mono:ui-monospace,Menlo,Consolas,monospace}
+/* dark = OS-dark unless the user forced light; or explicitly forced dark */
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1216;--ink:#e6e9ee;--dim:#9aa4b2;
+--faint:#6b7484;--line:#252b33;--card:#171b21;--bdd:#748ffc;--shared:#51cf66;--unit:#ffa94d;--other:#7b8494}}
+:root[data-theme="dark"]{--bg:#0f1216;--ink:#e6e9ee;--dim:#9aa4b2;--faint:#6b7484;--line:#252b33;--card:#171b21;
+--bdd:#748ffc;--shared:#51cf66;--unit:#ffa94d;--other:#7b8494}
+*{box-sizing:border-box}html,body{height:100%}
+body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+svg{position:fixed;inset:0;width:100vw;height:100vh;touch-action:none;cursor:grab}
+svg.grabbing{cursor:grabbing}
+.top{position:fixed;top:12px;left:12px;z-index:5;max-width:min(680px,calc(100vw - 24px));
+background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(8px);
+border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:0 2px 12px rgba(0,0,0,.10)}
+.hdr-row{display:flex;align-items:center;gap:12px}
+.brand{font-weight:600;color:var(--dim)}.brand span{color:var(--bdd)}
+.brand .tag{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-left:6px}
+.hdr-actions{margin-left:auto;display:flex;gap:6px}
+.ic{width:26px;height:26px;line-height:1;font-size:14px;border:1px solid var(--line);border-radius:7px;
+background:var(--bg);color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center}
+.ic:hover{color:var(--ink);border-color:var(--faint)}
+.top.collapsed .hdr-detail{display:none}
+h1{margin:10px 0 3px;font-size:20px;font-weight:600;letter-spacing:-.3px}
+.meta{margin:0;color:var(--faint);font-size:12.5px}
+.legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--dim)}
+.lg{display:inline-flex;align-items:center;gap:6px}
+.sw{width:10px;height:10px;border-radius:50%;display:inline-block}
+.sw.kind-bdd_tests{background:var(--bdd)}.sw.kind-shared_library{background:var(--shared)}
+.sw.kind-unit_tests{background:var(--unit)}.sw.kind-other{background:var(--other)}
+.hint{color:var(--faint);font-size:11.5px;flex-basis:100%}
+.empty{color:var(--faint);text-align:center;padding:40px}
+.edge{fill:none;stroke:var(--faint);opacity:.4}
+.arrowhead{fill:var(--faint);opacity:.6}
+.node circle{stroke:var(--card);stroke-width:2;cursor:pointer}
+.node.kind-bdd_tests circle{fill:var(--bdd)}.node.kind-shared_library circle{fill:var(--shared)}
+.node.kind-unit_tests circle{fill:var(--unit)}.node.kind-other circle{fill:var(--other)}
+.node text{fill:var(--ink);font-size:12px;font-weight:500;pointer-events:none;paint-order:stroke;
+stroke:var(--bg);stroke-width:3px}
+/* hover-to-isolate: dim everything, then the .active prefix wins on specificity */
+svg.has-focus .edge{opacity:.05}
+svg.has-focus .node{opacity:.18}
+svg.has-focus .edge.active{opacity:.95;stroke:var(--bdd)}
+svg.has-focus .node.active{opacity:1}
+.node.pinned circle{stroke:var(--bdd);stroke-width:3}
+@media(prefers-reduced-motion:no-preference){.edge,.node{transition:opacity .12s}}
+#panel{position:fixed;top:12px;right:12px;bottom:12px;width:min(340px,calc(100vw - 24px));z-index:6;
+background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);border:1px solid var(--line);
+border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.16);padding:16px 16px 8px;overflow:auto}
+#panel[hidden]{display:none}
+.pclose{position:absolute;top:10px;right:10px}
+.p-name{font-size:16px;font-weight:600;margin:0 26px 2px 0;word-break:break-word}
+.p-kind{color:var(--faint);font-size:12px;margin-bottom:14px}
+.p-sec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:600;
+margin:14px 0 6px}
+.pi-wrap{border-radius:8px;margin-bottom:2px}
+.pi-main{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;padding:7px 8px;
+border-radius:8px;color:var(--ink);font:inherit}
+.pi-main:hover{background:color-mix(in srgb,var(--bdd) 12%,transparent)}
+.pi-name{font-weight:500;display:block;word-break:break-word}
+.pi-detail{display:block;color:var(--faint);font-size:11.5px;font-family:var(--mono);margin-top:1px}
+.pi-exp{margin:1px 0 5px 8px;border:1px solid var(--line);border-radius:20px;padding:3px 10px;background:var(--bg);
+color:var(--dim);font:inherit;font-size:11px;cursor:pointer}
+.pi-exp:hover{border-color:var(--bdd);color:var(--bdd)}
+.pi-exp .cv{font-family:var(--mono);margin-right:3px}
+.pi-classes{padding:2px 8px 8px 18px}
+.pi-class{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12px;border-top:1px solid var(--line)}
+.pi-cname{color:var(--ink);word-break:break-word}
+.pi-cmeta{color:var(--faint);font-family:var(--mono);font-size:11px;white-space:nowrap}
+.p-empty{color:var(--faint);font-size:12.5px;padding:2px 8px}
+.p-ep{display:flex;align-items:center;gap:8px;padding:4px 8px;border-top:1px solid var(--line)}
+.ep-v{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.3px;border:1px solid;border-radius:5px;
+padding:1px 5px;min-width:42px;text-align:center;flex:none}
+.ep-get{color:var(--shared);border-color:var(--shared)}.ep-post{color:var(--bdd);border-color:var(--bdd)}
+.ep-put{color:var(--unit);border-color:var(--unit)}.ep-patch{color:var(--unit);border-color:var(--unit)}
+.ep-delete{color:#e03131;border-color:#e03131}.ep-any{color:var(--faint);border-color:var(--line)}
+.ep-r{color:var(--ink);font-family:var(--mono);font-size:11.5px;word-break:break-word}
+.ep-op{margin-left:auto;color:var(--bdd);font-size:10px;font-family:var(--mono);border:1px solid var(--bdd);
+border-radius:20px;padding:0 6px;flex:none}</style><script>(function(){try{var s=localStorage.getItem('testatlas:theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}})();</script></head><body><header class="top" id="top"><div class="hdr-row"><div class="brand">Test<span>Atlas</span> <span class="tag">project map</span></div><div class="hdr-actions"><button class="ic" onclick="toggleTheme()" title="Toggle light / dark" aria-label="Toggle theme">◐</button><button class="ic" id="collapseBtn" onclick="toggleHeader()" title="Collapse panel" aria-label="Collapse panel">–</button></div></div><div class="hdr-detail"><h1>SampleShop.sln</h1><p class="meta">4 projects · 2 dependencies · an arrow A→B means A depends on B (binds to / uses / inherits something in B)</p><div class="legend"><span class="lg"><span class="sw kind-bdd_tests"></span>BDD tests</span><span class="lg"><span class="sw kind-shared_library"></span>shared library</span><span class="lg"><span class="sw kind-unit_tests"></span>unit tests</span><span class="lg"><span class="sw kind-other"></span>other</span><span class="hint">click a project to pin its dependencies · drag to pan · scroll to zoom</span></div></div></header><svg id="g" viewBox="0 0 1000 1040" preserveAspectRatio="xMidYMid meet"><defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" class="arrowhead"/></marker></defs><g id="edges"><path class="edge" data-a="1" data-b="2" d="M504.41 333.84 Q566.96 445.04 665.08 500.23" stroke-width="4.5" marker-end="url(#arrow)"><title>SampleShop.ApiClients → SampleShop.Core  (2 inherits)</title></path><path class="edge" data-a="3" data-b="2" d="M507.84 693.59 Q619.04 631.04 674.23 532.92" stroke-width="4.5" marker-end="url(#arrow)"><title>SampleShop.PageObjects → SampleShop.Core  (2 inherits)</title></path></g><g id="nodes"><g class="node kind-shared_library" data-id="1"><circle cx="500" cy="326" r="7"/><text x="500" y="315" text-anchor="middle">SampleShop.ApiClients</text><title>SampleShop.ApiClients · shared_library  (depended on by 0, depends on 1)</title></g><g class="node kind-shared_library" data-id="2"><circle cx="686" cy="512" r="20"/><text x="714" y="516" text-anchor="start">SampleShop.Core</text><title>SampleShop.Core · shared_library  (depended on by 2, depends on 0)</title></g><g class="node kind-shared_library" data-id="3"><circle cx="500" cy="698" r="7"/><text x="500" y="717" text-anchor="middle">SampleShop.PageObjects</text><title>SampleShop.PageObjects · shared_library  (depended on by 0, depends on 1)</title></g><g class="node kind-bdd_tests" data-id="4"><circle cx="314" cy="512" r="7"/><text x="299" y="516" text-anchor="end">SampleShop.Tests</text><title>SampleShop.Tests · bdd_tests  (depended on by 0, depends on 0)</title></g></g></svg><aside id="panel" hidden><button class="ic pclose" onclick="unpin()" aria-label="Close">×</button><div id="panel-body"></div></aside><script>window.__MAP__={"n":{"1":{"name":"SampleShop.ApiClients","kind":"shared_library","in":0,"out":1,"eps":[{"v":"GET","r":"products/{id}"}]},"2":{"name":"SampleShop.Core","kind":"shared_library","in":2,"out":0},"3":{"name":"SampleShop.PageObjects","kind":"shared_library","in":0,"out":1},"4":{"name":"SampleShop.Tests","kind":"bdd_tests","in":0,"out":0}},"links":[{"a":1,"b":2,"w":2,"d":"2 inherits","cls":[{"c":"ApiClientBase","k":"inherits","w":2}]},{"a":3,"b":2,"w":2,"d":"2 inherits","cls":[{"c":"PageBase","k":"inherits","w":2}]}]};</script><script>(function(){
+  var svg=document.getElementById('g'); if(!svg) return;
+  var DATA=window.__MAP__||{n:{},links:[]};
+  var edges=[].slice.call(svg.querySelectorAll('.edge'));
+  var nodes=[].slice.call(svg.querySelectorAll('.node'));
+  var byId={}; nodes.forEach(function(nd){byId[nd.getAttribute('data-id')]=nd;});
+  var pinned=null;
+
+  function highlight(id){
+    var keep={}; keep[id]=1;
+    edges.forEach(function(e){
+      var a=e.getAttribute('data-a'),b=e.getAttribute('data-b'),on=(a===id||b===id);
+      e.classList.toggle('active',on); if(on){keep[a]=1;keep[b]=1;}
+    });
+    nodes.forEach(function(m){m.classList.toggle('active',!!keep[m.getAttribute('data-id')]);});
+    svg.classList.add('has-focus');
+  }
+  function clearHL(){
+    svg.classList.remove('has-focus');
+    edges.forEach(function(e){e.classList.remove('active');});
+    nodes.forEach(function(m){m.classList.remove('active');});
+  }
+  function esc(s){var d=document.createElement('div'); d.textContent=(s==null?'':s); return d.innerHTML;}
+  function vcls(v){v=(v||'').toUpperCase();return v==='GET'||v==='POST'||v==='PUT'||v==='PATCH'||v==='DELETE'?v.toLowerCase():'any';}
+  function list(arr,key){
+    if(!arr.length) return '<div class="p-empty">none</div>';
+    return arr.map(function(l){
+      var oid=l[key], nm=(DATA.n[oid]||{}).name||('#'+oid), cls=l.cls||[];
+      var main='<button class="pi-main" onclick="pin('+oid+')"><span class="pi-name">'+esc(nm)
+        +'</span><span class="pi-detail">'+esc(l.d)+'</span></button>';
+      var exp=cls.length? '<button class="pi-exp" onclick="toggleExp(this)" title="Expand to the classes behind this dependency"><span class="cv">▸</span>'+cls.length+' class'+(cls.length===1?'':'es')+'</button>':'';
+      var body=cls.length? '<div class="pi-classes" hidden>'+cls.map(function(c){
+        return '<div class="pi-class"><span class="pi-cname">'+esc(c.c)+'</span><span class="pi-cmeta">'+c.w+' '+esc(c.k)+'</span></div>';
+      }).join('')+'</div>' : '';
+      return '<div class="pi-wrap">'+main+exp+body+'</div>';
+    }).join('');
+  }
+  window.toggleExp=function(btn){
+    var wrap=btn.closest('.pi-wrap'), body=wrap.querySelector('.pi-classes'), cv=btn.querySelector('.cv');
+    if(body.hasAttribute('hidden')){body.removeAttribute('hidden'); if(cv)cv.textContent='▾';}
+    else{body.setAttribute('hidden',''); if(cv)cv.textContent='▸';}
+  };
+  function openPanel(id){
+    var m=DATA.n[id]; if(!m) return;
+    var out=DATA.links.filter(function(l){return String(l.a)===id;}).sort(function(x,y){return y.w-x.w;});
+    var inc=DATA.links.filter(function(l){return String(l.b)===id;}).sort(function(x,y){return y.w-x.w;});
+    var h='<div class="p-name">'+esc(m.name)+'</div><div class="p-kind">'+esc(m.kind)
+      +' · depended on by '+m.in+' · depends on '+m.out+'</div>';
+    h+='<div class="p-sec">Depends on ('+out.length+')</div>'+list(out,'b');
+    h+='<div class="p-sec">Depended on by ('+inc.length+')</div>'+list(inc,'a');
+    var eps=m.eps||[];
+    if(eps.length){
+      h+='<div class="p-sec">API endpoints ('+eps.length+')</div>';
+      h+=eps.map(function(e){
+        var op=e.r.indexOf('/')<0;
+        return '<div class="p-ep"><span class="ep-v ep-'+vcls(e.v)+'">'+esc(e.v)+'</span>'
+          +'<span class="ep-r">'+esc(e.r)+'</span>'+(op?'<span class="ep-op">op</span>':'')+'</div>';
+      }).join('');
+    }
+    document.getElementById('panel-body').innerHTML=h;
+    document.getElementById('panel').hidden=false;
+  }
+
+  window.pin=function(id){
+    id=String(id); if(!DATA.n[id]) return;
+    if(pinned && byId[pinned]) byId[pinned].classList.remove('pinned');
+    pinned=id; highlight(id);
+    if(byId[id]) byId[id].classList.add('pinned');
+    openPanel(id);
+  };
+  window.unpin=function(){
+    if(pinned && byId[pinned]) byId[pinned].classList.remove('pinned');
+    pinned=null; clearHL(); document.getElementById('panel').hidden=true;
+  };
+
+  nodes.forEach(function(nd){
+    var id=nd.getAttribute('data-id');
+    nd.addEventListener('mouseenter',function(){ if(pinned===null) highlight(id); });
+    nd.addEventListener('mouseleave',function(){ if(pinned===null) clearHL(); });
+    nd.addEventListener('click',function(ev){ ev.stopPropagation(); pin(id); });
+  });
+
+  // pan + zoom via viewBox. IMPORTANT: capture the pointer only once a drag actually MOVES —
+  // capturing on pointerdown retargets the click to the <svg>, so node clicks never reach pin().
+  var vb={x:0,y:0,w:1000,h:1040}, down=null, wasDrag=false;
+  function apply(){svg.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h);}
+  svg.addEventListener('wheel',function(ev){
+    ev.preventDefault();
+    var r=svg.getBoundingClientRect();
+    var mx=vb.x+(ev.clientX-r.left)/r.width*vb.w, my=vb.y+(ev.clientY-r.top)/r.height*vb.h;
+    var k=ev.deltaY<0?0.9:1.1111;
+    k=Math.max(0.2, Math.min(6, k*(vb.w/1000)))/(vb.w/1000);
+    vb.x=mx-(mx-vb.x)*k; vb.y=my-(my-vb.y)*k; vb.w*=k; vb.h*=k; apply();
+  },{passive:false});
+  svg.addEventListener('pointerdown',function(ev){down={x:ev.clientX,y:ev.clientY,id:ev.pointerId};wasDrag=false;});
+  svg.addEventListener('pointermove',function(ev){
+    if(!down) return;
+    var dx=ev.clientX-down.x, dy=ev.clientY-down.y;
+    if(!wasDrag){
+      if(Math.abs(dx)+Math.abs(dy)<=3) return;   // still a click, not a drag — don't capture
+      wasDrag=true; svg.classList.add('grabbing'); try{svg.setPointerCapture(down.id);}catch(e){}
+    }
+    var r=svg.getBoundingClientRect();
+    vb.x-=dx/r.width*vb.w; vb.y-=dy/r.height*vb.h;
+    down.x=ev.clientX; down.y=ev.clientY; apply();
+  });
+  function end(){down=null;svg.classList.remove('grabbing');}
+  svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
+  // background click (not a node, not the tail of a drag) clears the pin.
+  svg.addEventListener('click',function(ev){ if(!wasDrag && !ev.target.closest('.node')) unpin(); wasDrag=false; });
+})();
+function toggleHeader(){
+  var t=document.getElementById('top'); t.classList.toggle('collapsed');
+  document.getElementById('collapseBtn').textContent=t.classList.contains('collapsed')?'+':'–';
+}
+function toggleTheme(){
+  var r=document.documentElement, cur=r.getAttribute('data-theme');
+  var dark = cur ? cur==='dark' : matchMedia('(prefers-color-scheme:dark)').matches;
+  var next = dark?'light':'dark'; r.setAttribute('data-theme',next);
+  try{localStorage.setItem('testatlas:theme',next);}catch(e){}
+}</script></body></html>
