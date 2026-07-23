@@ -191,6 +191,9 @@ codemap stats  [<db>]      Human-readable summary: entity counts per project,
 codemap report [<db>]      Writes a single self-contained HTML drill-down of the map
     --html <file>          Output path (default: <db>.html)
 
+codemap map [<db>]         Writes a self-contained project dependency graph (SVG)
+    --html <file>          Output path (default: <db>-map.html)
+
 codemap search [<db>] <query>   FTS5 search over step definitions and scenarios
     --steps                Step definitions only
     --scenarios            Scenarios only
@@ -201,6 +204,14 @@ codemap validate [<db>]    Checks file is a CodeMap db and schema version is sup
 `search` runs the query against both FTS5 indexes: `search_steps` (step-definition expression /
 method / class) and `search_scenarios` (feature / scenario / step text / tags), printing each hit
 resolved to its name and `file:line`. `--steps` / `--scenarios` narrows to one facet.
+
+The `map` command is a companion visualization: a **project dependency graph**. A directed edge
+A→B ("A depends on B") is derived by aggregating the map's cross-project `binds_to` / `uses_type` /
+`inherits` edges to project level (an edge whose endpoints resolve to two different projects). Nodes
+are laid out on a deterministic circle, sized by in-degree so shared step-definition / page-object
+libraries stand out, coloured by project kind, with hover-to-isolate + pan/zoom. Self-contained
+(inline SVG + vanilla JS, no libraries). Only projects and their cross-project edges are read, so it
+is instant.
 
 The `report` command is the **v1.x HTML visualization** on the roadmap (§13). It reads a map
 file and emits one self-contained HTML document — inline CSS/JS only, no external stylesheet,

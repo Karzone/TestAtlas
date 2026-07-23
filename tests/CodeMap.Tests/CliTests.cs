@@ -91,6 +91,30 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
     }
 
     [Fact]
+    public void Map_writes_a_self_contained_project_graph()
+    {
+        using var temp = new TempDir();
+        var mapHtml = temp.File("map.html");
+        var (code, stdout) = Capture(() => Commands.RunMap(new[] { _fx.DbPath, "--html", mapHtml }));
+
+        Assert.Equal(ExitCode.Success, code);
+        var body = File.ReadAllText(mapHtml);
+        Assert.Contains("<svg", body);
+        Assert.DoesNotContain("<link", body);
+        // The fixture's SpecFlow feature binds a step defined in the Reqnroll project — one cross-project edge.
+        Assert.Contains("class=\"edge\"", body);
+        Assert.Contains("Fixture.SpecFlow", body);
+        Assert.Contains("project map", stdout);
+    }
+
+    [Fact]
+    public void Map_missing_db_is_bad_args()
+    {
+        var (code, _) = Capture(() => Commands.RunMap(new[] { "/no/such/map.db" }));
+        Assert.Equal(ExitCode.BadArgs, code);
+    }
+
+    [Fact]
     public void Report_missing_map_is_bad_args()
     {
         var (code, _) = Capture(() => Commands.RunReport(new[] { "/no/such/map.db" }));

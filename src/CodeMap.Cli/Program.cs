@@ -23,6 +23,7 @@ return command switch
     "stats" => Commands.RunStats(rest),
     "validate" => Commands.RunValidate(rest),
     "report" => Commands.RunReport(rest),
+    "map" => Commands.RunMap(rest),
     "search" => Commands.RunSearch(rest),
     "-h" or "--help" or "help" => Ok(Commands.PrintUsage),
     _ => Fail($"Unknown command '{command}'.")
@@ -266,6 +267,41 @@ public static class Commands
         return ExitCode.Success;
     }
 
+    public static int RunMap(string[] args)
+    {
+        var dbPath = args.FirstOrDefault(a => !a.StartsWith('-'))
+                     ?? Path.Combine(Directory.GetCurrentDirectory(), "codemap.db");
+        if (!File.Exists(dbPath))
+            return BadArgs($"map file not found: {dbPath}");
+
+        var output = OptionValue(args, "--html")
+                     ?? OptionValue(args, "--output")
+                     ?? Path.Combine(Path.GetDirectoryName(Path.GetFullPath(dbPath)) ?? ".",
+                            Path.GetFileNameWithoutExtension(dbPath) + "-map.html");
+
+        MapDocument doc;
+        try { doc = MapReader.Read(dbPath); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"error: could not read map '{dbPath}': {ex.Message}");
+            return ExitCode.Fatal;
+        }
+
+        try
+        {
+            File.WriteAllText(output, ProjectMapBuilder.Build(doc));
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"error: could not write map to '{output}': {ex.Message}");
+            return ExitCode.Fatal;
+        }
+
+        Console.WriteLine($"Wrote project map -> {output} ({doc.Projects.Count} project(s)). Open it in any browser.");
+        WarnIfStaleSchema(doc.UserVersion);
+        return ExitCode.Success;
+    }
+
     /// <summary>Shared note when a map predates the current schema — the report/search sees empty facets.</summary>
     private static void WarnIfStaleSchema(int version)
     {
@@ -404,6 +440,8 @@ public static class Commands
               testatlas stats [<db>]      entity counts per project, unbound/ambiguous, diagnostics
               testatlas report [<db>]     write a self-contained HTML drill-down of the map
                   --html <file>       output path (default <db>.html)
+              testatlas map [<db>]        write a self-contained project dependency graph
+                  --html <file>       output path (default <db>-map.html)
               testatlas search [<db>] <query>   FTS5 search over step definitions and scenarios
                   --steps             step definitions only
                   --scenarios         scenarios only

@@ -75,5 +75,17 @@ dotnet run --project src/CodeMap.Cli -- search reqdemo.db dashboard
 (step-definition text) and `search_scenarios` (feature / scenario / step text / tags) — and prints
 each hit resolved to its name and `file:line`. `--steps` / `--scenarios` narrows to one facet.
 
+### Project dependency map
+
+```bash
+dotnet run --project src/CodeMap.Cli -- map reqdemo.db --html reqdemo-map.html
+# -> open reqdemo-map.html in any browser
+```
+
+`testatlas map [<db>]` renders a self-contained project dependency graph: each project is a node
+(sized by how many others depend on it, so shared step / page-object libraries stand out), and a
+directed edge A→B means project A binds to / uses / inherits something in project B. Hover a node to
+isolate its links; drag to pan, scroll to zoom.
+
 > The same commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.
