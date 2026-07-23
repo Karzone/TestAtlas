@@ -26,14 +26,41 @@ public static class SqliteMapWriter
         try
         {
             WriteTo(result, tempPath);
-            // Atomic replace: rename over the target (same directory ⇒ same volume).
-            File.Move(tempPath, fullOut, overwrite: true);
+            AtomicReplace(tempPath, fullOut);
         }
         finally
         {
             if (File.Exists(tempPath))
             {
                 try { File.Delete(tempPath); } catch { /* best effort cleanup */ }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Rename the temp file over the target (same directory ⇒ same volume). If the target is
+    /// read-only or briefly locked, clear the attribute and retry once; on a genuine lock (the map
+    /// open in another program) surface a clear, actionable message instead of a raw OS error.
+    /// </summary>
+    private static void AtomicReplace(string tempPath, string target)
+    {
+        try
+        {
+            File.Move(tempPath, target, overwrite: true);
+        }
+        catch (Exception ex) when (ex is UnauthorizedAccessException or IOException)
+        {
+            try
+            {
+                if (File.Exists(target))
+                    File.SetAttributes(target, File.GetAttributes(target) & ~FileAttributes.ReadOnly);
+                File.Move(tempPath, target, overwrite: true);
+            }
+            catch (Exception ex2) when (ex2 is UnauthorizedAccessException or IOException)
+            {
+                throw new IOException(
+                    $"Could not replace '{target}'. It may be open in another program (e.g. DB Browser) " +
+                    "or read-only — close it, or pass a different --output path.", ex2);
             }
         }
     }

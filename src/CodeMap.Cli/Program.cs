@@ -126,6 +126,10 @@ public static class Commands
         }
 
         Console.WriteLine($"TestAtlas map: {dbPath} (schema v{doc.UserVersion})");
+        if (doc.UserVersion != MapSchema.Version)
+            Console.WriteLine(
+                $"note: this map was written by schema v{doc.UserVersion}; this tool is v{MapSchema.Version}. " +
+                "Re-run `testatlas index` to get the latest fields (kinds, step definitions).");
         if (doc.Meta.TryGetValue(MapSchema.MetaGeneratedUtc, out var gen))
             Console.WriteLine($"generated: {gen}");
         Console.WriteLine();

@@ -1,3 +1,4 @@
+using Microsoft.Data.Sqlite;
 using TestAtlas.Core.Model;
 using TestAtlas.Core.Storage;
 using Xunit;
@@ -36,6 +37,43 @@ public sealed class SqliteMapWriterTests
             .Where(n => n!.EndsWith(".tmp"))
             .ToArray();
         Assert.Empty(leftovers);
+    }
+
+    [Fact]
+    public void Overwrites_a_read_only_target()
+    {
+        using var temp = new TempDir();
+        var target = temp.File("codemap.db");
+        SqliteMapWriter.Write(Sample(), target);
+        File.SetAttributes(target, File.GetAttributes(target) | FileAttributes.ReadOnly);
+
+        // Must not throw — the writer clears read-only and replaces (the "file is locked/read-only" fix).
+        SqliteMapWriter.Write(Sample(), target);
+        Assert.True(MapReader.TryValidate(target, out _, out _));
+    }
+
+    [Fact]
+    public void Reads_an_older_schema_db_without_crashing()
+    {
+        using var temp = new TempDir();
+        var target = temp.File("v1.db");
+        SqliteMapWriter.Write(Sample(), target); // v2
+
+        // Downgrade to a v1-shaped file: drop the new table + stamp the old version.
+        using (var conn = new SqliteConnection(new SqliteConnectionStringBuilder
+               { DataSource = target, Pooling = false }.ToString()))
+        {
+            conn.Open();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DROP TABLE step_definitions; PRAGMA user_version = 1;";
+            cmd.ExecuteNonQuery();
+        }
+        SqliteConnection.ClearAllPools();
+
+        var doc = MapReader.Read(target);          // must not throw on the missing table
+        Assert.Equal(1, doc.UserVersion);
+        Assert.Empty(doc.StepDefinitions);
+        Assert.Single(doc.Classes);                // the rest still reads
     }
 
     [Fact]

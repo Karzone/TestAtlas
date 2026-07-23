@@ -205,9 +205,18 @@ public static class MapReader
         return list;
     }
 
+    private static bool TableExists(SqliteConnection conn, string name)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=$n;";
+        var p = cmd.CreateParameter(); p.ParameterName = "$n"; p.Value = name; cmd.Parameters.Add(p);
+        return cmd.ExecuteScalar() is not null;
+    }
+
     private static List<StepDefinitionRow> ReadStepDefinitions(SqliteConnection conn)
     {
         var list = new List<StepDefinitionRow>();
+        if (!TableExists(conn, "step_definitions")) return list; // older map (schema v1) — no crash
         using var cmd = conn.CreateCommand();
         cmd.CommandText =
             "SELECT id, method_id, class_id, project_id, keyword, expression, expression_kind, parameters, file_path, line_start " +
