@@ -116,9 +116,11 @@ public static class Classifier
     }
 
     /// <summary>
-    /// Summarise a project's kind from its classified classes (spec §5.1): predominantly BDD step
-    /// classes ⇒ <c>bdd_tests</c>; predominantly test classes ⇒ <c>unit_tests</c>; otherwise
-    /// <c>shared_library</c> when it holds classes, else <c>other</c>.
+    /// Summarise a project's kind from its classified classes (spec §5.1): <b>any</b> BDD step class
+    /// ⇒ <c>bdd_tests</c> (a project that hosts step definitions is BDD test-automation even when it
+    /// also carries generated test fixtures — those often outnumber the step classes); otherwise test
+    /// classes ⇒ <c>unit_tests</c>; otherwise <c>shared_library</c> when it holds classes, else
+    /// <c>other</c>.
     /// </summary>
     public static string SummariseProject(IEnumerable<ClassEntity> classes)
     {
@@ -130,7 +132,10 @@ public static class Classifier
             var steps = list.Count(c => c.Kind == Kinds.StepClass);
             var tests = list.Count(c => c.Kind == Kinds.TestClass);
 
-            if (steps > 0 && steps >= tests) return Kinds.BddTests;
+            // Step definitions are the defining BDD signal — a step-hosting project that other
+            // projects bind to must not be mislabelled unit_tests just because it also holds many
+            // generated [TestFixture]/[TestClass] codebehind classes.
+            if (steps > 0) return Kinds.BddTests;
             if (tests > 0) return Kinds.UnitTests;
             return Kinds.SharedLibrary;
         }

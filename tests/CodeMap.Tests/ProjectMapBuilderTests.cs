@@ -26,9 +26,10 @@ public sealed class ProjectMapBuilderTests
         {
             new ClassRow(1, 1, "C1", "N", null, Kinds.StepClass, "A.cs", 1, 3),
             new ClassRow(2, 1, "C2", "N", null, Kinds.Other, "A.cs", 1, 3),
+            new ClassRow(3, 2, "BSteps", "N", null, Kinds.StepClass, "B.cs", 1, 3), // hosts the step def in Lib.B
         },
-        Methods = new[] { new MethodRow(1, 1, 1, "M", "M()", "public", Kinds.Other, "A.cs", 2, 2) },
-        StepDefinitions = new[] { new StepDefinitionRow(1, 1, 1, 2, "Given", "x", ExpressionKinds.Regex, "", "B.cs", 2) },
+        Methods = new[] { new MethodRow(1, 3, 2, "M", "M()", "public", Kinds.StepDefinitionMethod, "B.cs", 2, 2) },
+        StepDefinitions = new[] { new StepDefinitionRow(1, 1, 3, 2, "Given", "x", ExpressionKinds.Regex, "", "B.cs", 2) },
         ScenarioSteps = new[] { new ScenarioStepRow(1, 1, 1, "Given", "x", 0, false, false, "A.feature", 1) },
         Edges = new[]
         {
@@ -106,6 +107,12 @@ public sealed class ProjectMapBuilderTests
         Assert.Contains("\"a\":1,\"b\":2,\"w\":1,\"d\":\"1 binds_to\"", html);
         Assert.Contains("Lib.B \\u003cb>", html);       // the < is <-escaped inside the <script> blob
         Assert.DoesNotContain("Lib.B <b>", html);       // never a raw tag that could break the script
+
+        // Class-level drill-down: the link carries the target classes behind the dependency, so the
+        // panel can expand "Feature.A → Lib.B" into "BSteps · 1 binds_to".
+        Assert.Contains("\"cls\":[{\"c\":\"BSteps\",\"k\":\"binds_to\",\"w\":1}]", html);
+        Assert.Contains("toggleExp", html);
+        Assert.Contains("Show the classes behind this", html);
 
         // Regression: the pointer must be captured only once a drag MOVES (via down.id), NOT on
         // pointerdown — capturing on pointerdown retargets the click to the <svg> so node clicks never

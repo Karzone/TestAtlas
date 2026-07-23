@@ -80,6 +80,29 @@ public sealed class ClassifierTests
         Assert.Equal(Kinds.Other, Classifier.ClassifyMethod(new MethodFacts(false, false, false), "nonsense-kind"));
         Assert.Equal(Kinds.Other, Classifier.SummariseProject(Array.Empty<ClassEntity>()));
     }
+
+    private static ClassEntity Cls(int id, string kind) => new(id, 1, "C" + id, "N", null, kind, "C.cs", 1, 2);
+
+    [Fact]
+    public void Project_with_step_classes_is_bdd_even_when_test_classes_outnumber_them()
+    {
+        // The real-world mislabel: a step-definition project (bound to by other projects) that also
+        // carries many generated [TestFixture] codebehind classes. Step classes win ⇒ bdd_tests.
+        var classes = new[]
+        {
+            Cls(1, Kinds.StepClass),
+            Cls(2, Kinds.TestClass), Cls(3, Kinds.TestClass), Cls(4, Kinds.TestClass),
+        };
+        Assert.Equal(Kinds.BddTests, Classifier.SummariseProject(classes));
+    }
+
+    [Fact]
+    public void Project_with_only_test_classes_stays_unit_tests()
+        => Assert.Equal(Kinds.UnitTests, Classifier.SummariseProject(new[] { Cls(1, Kinds.TestClass), Cls(2, Kinds.TestClass) }));
+
+    [Fact]
+    public void Project_with_neither_is_a_shared_library()
+        => Assert.Equal(Kinds.SharedLibrary, Classifier.SummariseProject(new[] { Cls(1, Kinds.PageObject), Cls(2, Kinds.Helper) }));
 }
 
 public sealed class MsBuildGuardTests

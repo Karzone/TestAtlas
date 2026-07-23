@@ -80,8 +80,11 @@ and line locations.
 ### 5.1 Entities
 
 - **Project** — name, path, target framework, detected test framework(s), detected
-  automation frameworks, and a computed `kind` summary (e.g. `bdd_tests`, `unit_tests`,
-  `shared_library`).
+  automation frameworks, and a computed `kind` summary: **any** step class ⇒ `bdd_tests`
+  (a project hosting step definitions is BDD test-automation even when generated
+  `[TestFixture]`/`[TestClass]` codebehind classes outnumber the step classes — otherwise a
+  step-definition project bound to by others is mislabelled `unit_tests`); otherwise test
+  classes ⇒ `unit_tests`; otherwise classes present ⇒ `shared_library`; else `other`.
 - **Class** — name, namespace, base type, and a classified `kind`:
   `step_class | page_object | api_client | test_class | hook_class | helper | other`.
 - **Method** — signature, containing class, visibility, and classified `kind`:
@@ -212,7 +215,8 @@ are laid out on a deterministic circle, sized by in-degree so shared step-defini
 libraries stand out, coloured by project kind, with hover-to-isolate + pan/zoom. **Clicking a project
 pins it** and opens a dependency panel listing what it *depends on* and what *depends on it*, each with
 the underlying link breakdown (e.g. `→ SharedSteps · 340 binds_to`); clicking a panel entry walks the
-chain to that project. A manual light/dark toggle (persisted) and a collapsible header (full-viewport
+chain to that project, and each entry **expands to the class level** — the specific step / page-object
+classes behind that dependency, with counts (e.g. `CommonSteps · 320 binds_to`). A manual light/dark toggle (persisted) and a collapsible header (full-viewport
 graph) round it out. Self-contained (inline SVG + vanilla JS, no libraries). Only projects and their
 cross-project edges are read, so it is instant.
 

@@ -18,7 +18,10 @@ namespace TestAtlas.Core.Reporting;
 public static class ProjectMapBuilder
 {
     private sealed record Node(int Id, string Name, string Kind, double X, double Y, double R, int InDegree, int OutDegree);
-    private sealed record Link(int From, int To, int Weight, string Detail);
+    private sealed record ClassBit(string Name, string Kind, int Weight);
+    private sealed record Link(int From, int To, int Weight, string Detail, IReadOnlyList<ClassBit> Classes);
+
+    private const int MaxClassRows = 20;
 
     // SVG canvas constants.
     private const double Cx = 500, Cy = 512;
@@ -40,8 +43,22 @@ public static class ProjectMapBuilder
             _ => null,
         };
 
-        // ---- aggregate cross-project edges into weighted, kind-tallied project links ----
+        // Resolve a binds_to target (a step definition) to the class that hosts it — so the panel can
+        // drill from a project dependency down to the specific step / page-object classes behind it.
+        var stepDefClass = doc.StepDefinitions.ToDictionary(s => (long)s.Id, s => s.ClassId);
+        var classNameById = doc.Classes.ToDictionary(c => c.Id, c => c.Name);
+        var classKindById = doc.Classes.ToDictionary(c => c.Id, c => c.Kind);
+
+        int? TargetClassOf(EdgeRow e) => e.ToId is not int t ? null : e.EdgeKind switch
+        {
+            EdgeKinds.BindsTo => stepDefClass.TryGetValue(t, out var cid) ? cid : (int?)null,
+            EdgeKinds.UsesType or EdgeKinds.Inherits => classNameById.ContainsKey(t) ? t : (int?)null,
+            _ => null,
+        };
+
+        // ---- aggregate cross-project edges: weight + kind tally (project) and per-target-class ----
         var agg = new Dictionary<(int From, int To), Dictionary<string, int>>();
+        var classAgg = new Dictionary<(int From, int To), Dictionary<(int Class, string Kind), int>>();
         foreach (var e in doc.Edges)
         {
             if (e.EdgeKind == EdgeKinds.Unbound) continue;
@@ -50,6 +67,13 @@ public static class ProjectMapBuilder
             if (from is not int a || to is not int b || a == b) continue;
             if (!agg.TryGetValue((a, b), out var byKind)) agg[(a, b)] = byKind = new();
             byKind[e.EdgeKind] = byKind.TryGetValue(e.EdgeKind, out var c) ? c + 1 : 1;
+
+            if (TargetClassOf(e) is int tc)
+            {
+                if (!classAgg.TryGetValue((a, b), out var byClass)) classAgg[(a, b)] = byClass = new();
+                var key = (tc, e.EdgeKind);
+                byClass[key] = byClass.TryGetValue(key, out var cc) ? cc + 1 : 1;
+            }
         }
 
         var inDeg = new Dictionary<int, int>();
@@ -79,8 +103,20 @@ public static class ProjectMapBuilder
         }
 
         var links = agg
-            .Select(kv => new Link(kv.Key.From, kv.Key.To, kv.Value.Values.Sum(),
-                string.Join(", ", kv.Value.OrderByDescending(x => x.Value).Select(x => $"{x.Value} {x.Key}"))))
+            .Select(kv =>
+            {
+                var classes = classAgg.TryGetValue(kv.Key, out var byClass)
+                    ? byClass.OrderByDescending(x => x.Value)
+                        .ThenBy(x => classNameById.TryGetValue(x.Key.Class, out var nm) ? nm : "", StringComparer.Ordinal)
+                        .Take(MaxClassRows)
+                        .Select(x => new ClassBit(
+                            classNameById.TryGetValue(x.Key.Class, out var nm) ? nm : "?", x.Key.Kind, x.Value))
+                        .ToList()
+                    : new List<ClassBit>();
+                return new Link(kv.Key.From, kv.Key.To, kv.Value.Values.Sum(),
+                    string.Join(", ", kv.Value.OrderByDescending(x => x.Value).Select(x => $"{x.Value} {x.Key}")),
+                    classes);
+            })
             .OrderBy(l => l.From).ThenBy(l => l.To)
             .ToList();
         var maxWeight = links.Count == 0 ? 1 : links.Max(l => l.Weight);
@@ -193,7 +229,15 @@ public static class ProjectMapBuilder
             if (i > 0) sb.Append(',');
             var l = links[i];
             sb.Append("{\"a\":").Append(l.From).Append(",\"b\":").Append(l.To)
-              .Append(",\"w\":").Append(l.Weight).Append(",\"d\":").Append(J(l.Detail)).Append('}');
+              .Append(",\"w\":").Append(l.Weight).Append(",\"d\":").Append(J(l.Detail)).Append(",\"cls\":[");
+            for (var j = 0; j < l.Classes.Count; j++)
+            {
+                if (j > 0) sb.Append(',');
+                var cb = l.Classes[j];
+                sb.Append("{\"c\":").Append(J(cb.Name)).Append(",\"k\":").Append(J(cb.Kind))
+                  .Append(",\"w\":").Append(cb.Weight).Append('}');
+            }
+            sb.Append("]}");
         }
         sb.Append("]}");
     }
@@ -316,11 +360,19 @@ public static class ProjectMapBuilder
         .p-kind{color:var(--faint);font-size:12px;margin-bottom:14px}
         .p-sec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:600;
         margin:14px 0 6px}
-        .p-item{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;padding:7px 8px;
+        .pi-wrap{border-radius:8px}
+        .p-item{display:flex;align-items:stretch;gap:2px}
+        .pi-main{flex:1;min-width:0;text-align:left;border:0;background:none;cursor:pointer;padding:7px 8px;
         border-radius:8px;color:var(--ink);font:inherit}
-        .p-item:hover{background:color-mix(in srgb,var(--bdd) 12%,transparent)}
-        .p-item .pi-name{font-weight:500}
-        .p-item .pi-detail{display:block;color:var(--faint);font-size:11.5px;font-family:var(--mono);margin-top:1px}
+        .pi-main:hover{background:color-mix(in srgb,var(--bdd) 12%,transparent)}
+        .pi-name{font-weight:500;display:block;word-break:break-word}
+        .pi-detail{display:block;color:var(--faint);font-size:11.5px;font-family:var(--mono);margin-top:1px}
+        .pi-exp{flex:none;width:26px;border:0;background:none;color:var(--faint);cursor:pointer;font-size:11px;border-radius:8px}
+        .pi-exp:hover{background:color-mix(in srgb,var(--bdd) 12%,transparent);color:var(--ink)}
+        .pi-classes{padding:2px 8px 8px 18px}
+        .pi-class{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12px;border-top:1px solid var(--line)}
+        .pi-cname{color:var(--ink);word-break:break-word}
+        .pi-cmeta{color:var(--faint);font-family:var(--mono);font-size:11px;white-space:nowrap}
         .p-empty{color:var(--faint);font-size:12.5px;padding:2px 8px}
         """;
 
@@ -355,11 +407,22 @@ public static class ProjectMapBuilder
           function esc(s){var d=document.createElement('div'); d.textContent=(s==null?'':s); return d.innerHTML;}
           function list(arr,key){
             if(!arr.length) return '<div class="p-empty">none</div>';
-            return arr.map(function(l){var oid=l[key], nm=(DATA.n[oid]||{}).name||('#'+oid);
-              return '<button class="p-item" onclick="pin('+oid+')"><span class="pi-name">'+esc(nm)
+            return arr.map(function(l){
+              var oid=l[key], nm=(DATA.n[oid]||{}).name||('#'+oid), cls=l.cls||[];
+              var main='<button class="pi-main" onclick="pin('+oid+')"><span class="pi-name">'+esc(nm)
                 +'</span><span class="pi-detail">'+esc(l.d)+'</span></button>';
+              var exp=cls.length? '<button class="pi-exp" onclick="toggleExp(this)" title="Show the classes behind this" aria-label="Expand classes">▸</button>':'';
+              var body=cls.length? '<div class="pi-classes" hidden>'+cls.map(function(c){
+                return '<div class="pi-class"><span class="pi-cname">'+esc(c.c)+'</span><span class="pi-cmeta">'+c.w+' '+esc(c.k)+'</span></div>';
+              }).join('')+'</div>' : '';
+              return '<div class="pi-wrap"><div class="p-item">'+main+exp+'</div>'+body+'</div>';
             }).join('');
           }
+          window.toggleExp=function(btn){
+            var wrap=btn.closest('.pi-wrap'), body=wrap.querySelector('.pi-classes');
+            if(body.hasAttribute('hidden')){body.removeAttribute('hidden');btn.textContent='▾';}
+            else{body.setAttribute('hidden','');btn.textContent='▸';}
+          };
           function openPanel(id){
             var m=DATA.n[id]; if(!m) return;
             var out=DATA.links.filter(function(l){return String(l.a)===id;}).sort(function(x,y){return y.w-x.w;});
