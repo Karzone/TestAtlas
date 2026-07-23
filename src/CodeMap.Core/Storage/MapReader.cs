@@ -14,6 +14,10 @@ public sealed record MethodRow(int Id, int ClassId, int ProjectId, string Name, 
 /// <summary>A projected project row.</summary>
 public sealed record ProjectRow(int Id, string Name, string Path, string? TargetFramework, string Kind);
 
+/// <summary>A projected step-definition row.</summary>
+public sealed record StepDefinitionRow(int Id, int MethodId, int ClassId, int ProjectId, string Keyword,
+    string Expression, string ExpressionKind, string? Parameters, string FilePath, int LineStart);
+
 /// <summary>A projected diagnostic row.</summary>
 public sealed record DiagnosticRow(string Severity, string Code, string Message, string? Location);
 
@@ -25,6 +29,7 @@ public sealed class MapDocument
     public IReadOnlyList<ProjectRow> Projects { get; init; } = Array.Empty<ProjectRow>();
     public IReadOnlyList<ClassRow> Classes { get; init; } = Array.Empty<ClassRow>();
     public IReadOnlyList<MethodRow> Methods { get; init; } = Array.Empty<MethodRow>();
+    public IReadOnlyList<StepDefinitionRow> StepDefinitions { get; init; } = Array.Empty<StepDefinitionRow>();
     public IReadOnlyList<DiagnosticRow> Diagnostics { get; init; } = Array.Empty<DiagnosticRow>();
 }
 
@@ -50,6 +55,7 @@ public static class MapReader
             Projects = ReadProjects(conn),
             Classes = ReadClasses(conn),
             Methods = ReadMethods(conn),
+            StepDefinitions = ReadStepDefinitions(conn),
             Diagnostics = ReadDiagnostics(conn),
         };
         SqliteConnection.ClearAllPools();
@@ -73,7 +79,7 @@ public static class MapReader
             conn.Open();
             userVersion = ReadUserVersion(conn);
             // Presence of the core tables is our signal that this is our schema.
-            foreach (var table in new[] { "meta", "projects", "classes", "methods", "diagnostics" })
+            foreach (var table in new[] { "meta", "projects", "classes", "methods", "step_definitions", "diagnostics" })
             {
                 using var cmd = conn.CreateCommand();
                 cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=$n;";
@@ -126,6 +132,12 @@ public static class MapReader
               .Append('|').Append(m.Name).Append('|').Append(m.Signature).Append('|').Append(m.Visibility)
               .Append('|').Append(m.Kind).Append('|').Append(m.FilePath).Append('|').Append(m.LineStart)
               .Append('|').Append(m.LineEnd).Append('\n');
+
+        foreach (var s in doc.StepDefinitions)
+            sb.Append("stepdef|").Append(s.Id).Append('|').Append(s.MethodId).Append('|').Append(s.ClassId)
+              .Append('|').Append(s.ProjectId).Append('|').Append(s.Keyword).Append('|').Append(s.Expression)
+              .Append('|').Append(s.ExpressionKind).Append('|').Append(s.Parameters).Append('|')
+              .Append(s.FilePath).Append('|').Append(s.LineStart).Append('\n');
 
         foreach (var d in doc.Diagnostics)
             sb.Append("diag|").Append(d.Severity).Append('|').Append(d.Code).Append('|')
@@ -190,6 +202,21 @@ public static class MapReader
             list.Add(new MethodRow(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetString(3),
                 r.GetString(4), r.GetString(5), r.GetString(6), r.GetString(7),
                 r.GetInt32(8), r.GetInt32(9)));
+        return list;
+    }
+
+    private static List<StepDefinitionRow> ReadStepDefinitions(SqliteConnection conn)
+    {
+        var list = new List<StepDefinitionRow>();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText =
+            "SELECT id, method_id, class_id, project_id, keyword, expression, expression_kind, parameters, file_path, line_start " +
+            "FROM step_definitions ORDER BY id;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new StepDefinitionRow(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetInt32(3),
+                r.GetString(4), r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7),
+                r.GetString(8), r.GetInt32(9)));
         return list;
     }
 

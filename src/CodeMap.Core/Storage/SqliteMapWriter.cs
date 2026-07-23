@@ -62,6 +62,7 @@ public static class SqliteMapWriter
                 InsertProjects(conn, tx, result.Projects);
                 InsertClasses(conn, tx, result.Classes);
                 InsertMethods(conn, tx, result.Methods);
+                InsertStepDefinitions(conn, tx, result.StepDefinitions);
                 InsertDiagnostics(conn, tx, result.Diagnostics);
 
                 tx.Commit();
@@ -186,6 +187,40 @@ public static class SqliteMapWriter
             fp.Value = m.FilePath;
             ls.Value = m.LineStart;
             le.Value = m.LineEnd;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertStepDefinitions(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<StepDefinitionEntity> steps)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "INSERT INTO step_definitions(id, method_id, class_id, project_id, keyword, expression, expression_kind, parameters, file_path, line_start) " +
+            "VALUES ($id, $mid, $cid, $pid, $kw, $ex, $ek, $pm, $fp, $ls);";
+        var id = Add(cmd, "$id");
+        var mid = Add(cmd, "$mid");
+        var cid = Add(cmd, "$cid");
+        var pid = Add(cmd, "$pid");
+        var kw = Add(cmd, "$kw");
+        var ex = Add(cmd, "$ex");
+        var ek = Add(cmd, "$ek");
+        var pm = Add(cmd, "$pm");
+        var fp = Add(cmd, "$fp");
+        var ls = Add(cmd, "$ls");
+
+        foreach (var s in steps)
+        {
+            id.Value = s.Id;
+            mid.Value = s.MethodId;
+            cid.Value = s.ClassId;
+            pid.Value = s.ProjectId;
+            kw.Value = s.Keyword;
+            ex.Value = s.Expression;
+            ek.Value = s.ExpressionKind;
+            pm.Value = (object?)s.Parameters ?? DBNull.Value;
+            fp.Value = s.FilePath;
+            ls.Value = s.LineStart;
             cmd.ExecuteNonQuery();
         }
     }

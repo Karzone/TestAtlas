@@ -89,8 +89,8 @@ public static class Commands
             var warnings = result.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
             Console.WriteLine(
                 $"Indexed {result.Projects.Count} project(s): " +
-                $"{result.Classes.Count} class(es), {result.Methods.Count} method(s). " +
-                $"unbound steps: 0, ambiguous bindings: 0. " +
+                $"{result.Classes.Count} class(es), {result.Methods.Count} method(s), " +
+                $"{result.StepDefinitions.Count} step definition(s). " +
                 $"diagnostics: {result.Diagnostics.Count} ({errors} error(s), {warnings} warning(s)). " +
                 $"-> {output} ({sw.ElapsedMilliseconds} ms)");
             if (errors > 0)
@@ -139,8 +139,15 @@ public static class Commands
         }
 
         Console.WriteLine();
-        Console.WriteLine($"totals: {doc.Projects.Count} project(s), {doc.Classes.Count} class(es), {doc.Methods.Count} method(s)");
-        // Slice 1 has no scenario steps / bindings yet, so these are structurally zero.
+        Console.WriteLine($"totals: {doc.Projects.Count} project(s), {doc.Classes.Count} class(es), " +
+            $"{doc.Methods.Count} method(s), {doc.StepDefinitions.Count} step definition(s)");
+
+        var kinds = doc.Classes.GroupBy(c => c.Kind).OrderByDescending(g => g.Count()).ThenBy(g => g.Key);
+        Console.WriteLine("class kinds:");
+        foreach (var g in kinds)
+            Console.WriteLine($"  {g.Key,-14} {g.Count()}");
+
+        // Scenario steps + binds_to/unbound edges land in slice 2b, so these are still structurally zero.
         Console.WriteLine("unbound steps: 0");
         Console.WriteLine("ambiguous bindings: 0");
 

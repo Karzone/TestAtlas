@@ -7,7 +7,8 @@ namespace TestAtlas.Core.Storage;
 /// </summary>
 public static class MapSchema
 {
-    public const int Version = 1;
+    // v2 (slice 2a): adds the step_definitions table and real class/method kinds.
+    public const int Version = 2;
 
     /// <summary>DDL for a fresh map file. Ordered; safe to run inside one transaction.</summary>
     public const string CreateSql = """
@@ -49,6 +50,19 @@ public static class MapSchema
             line_end   INTEGER NOT NULL
         );
 
+        CREATE TABLE step_definitions (
+            id              INTEGER PRIMARY KEY,
+            method_id       INTEGER NOT NULL REFERENCES methods(id),
+            class_id        INTEGER NOT NULL REFERENCES classes(id),
+            project_id      INTEGER NOT NULL REFERENCES projects(id),
+            keyword         TEXT NOT NULL,
+            expression      TEXT NOT NULL,
+            expression_kind TEXT NOT NULL,
+            parameters      TEXT,
+            file_path       TEXT NOT NULL,
+            line_start      INTEGER NOT NULL
+        );
+
         CREATE TABLE diagnostics (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
             severity TEXT NOT NULL,
@@ -57,9 +71,11 @@ public static class MapSchema
             location TEXT
         );
 
-        CREATE INDEX ix_classes_project ON classes(project_id);
-        CREATE INDEX ix_methods_class   ON methods(class_id);
-        CREATE INDEX ix_methods_project ON methods(project_id);
+        CREATE INDEX ix_classes_project  ON classes(project_id);
+        CREATE INDEX ix_methods_class    ON methods(class_id);
+        CREATE INDEX ix_methods_project  ON methods(project_id);
+        CREATE INDEX ix_stepdefs_method  ON step_definitions(method_id);
+        CREATE INDEX ix_stepdefs_project ON step_definitions(project_id);
         """;
 
     // meta keys

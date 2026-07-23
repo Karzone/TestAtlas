@@ -21,28 +21,28 @@ dotnet run --project src/CodeMap.Cli -- index samples/ReqnrollLoginDemo/LoginAut
 dotnet run --project src/CodeMap.Cli -- stats reqdemo.db
 ```
 
-### What the mapper produces
+### What the mapper produces (slice 2a)
 
 ```
-Indexed 1 project(s): 5 class(es), 20 method(s). unbound steps: 0, ambiguous bindings: 0.
-diagnostics: 0 (0 error(s)).
+Indexed 1 project(s): 3 class(es), 18 method(s), 5 step definition(s).
+diagnostics: 0 (0 error(s), 0 warning(s)).
 
-project                           classes  methods
-LoginAutomation                         5       20
+class kinds:
+  other       2
+  step_class  1
 ```
 
-- **`LoginStepDefinitions`** (authored) — the five real `[Given]/[When]/[Then]` cucumber-expression bindings.
-- **`LoginFeature` / `FixtureData`** (generated) — Reqnroll's codebehind for `Login.feature`, including the
-  scenario methods `SuccessfulSignIn()` and `LockedOutAfterFailures()`.
-- Two generated `obj/**/xUnit.AssemblyHooks.cs` classes are also picked up. **Known gap:** a `codemap.json`
-  option to exclude generated (`obj/`) sources is a slice-2 refinement — the map faithfully reports what the
-  compilation contains today.
+- **`LoginStepDefinitions`** → classified **`step_class`**, with its five real `[Given]/[When]/[Then]`
+  cucumber-expression **step definitions** extracted (keyword + expression + `expression_kind`).
+- **`LoginFeature` / `FixtureData`** — Reqnroll's generated codebehind for `Login.feature` (the scenario
+  methods `SuccessfulSignIn()` / `LockedOutAfterFailures()` live here).
+- The generated `obj/**/xUnit.AssemblyHooks.cs` classes are **excluded** — slice 2a skips `obj/` and `bin/`.
 
 ### Matcher resolution (from the tested `StepMatcher`)
 
 `Login.feature`'s seven steps resolve to six `exact` bindings on `LoginStepDefinitions` and one `unbound`
 step (`And an unbound narrative step with no binding`). Persisting these as `binds_to` / `unbound` edges is
-slice 2.
+slice 2b.
 
 > The same two commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.

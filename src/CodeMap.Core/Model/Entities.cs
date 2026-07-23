@@ -11,7 +11,7 @@ public static class Kinds
     // The universal fallback. Constraint (spec G2): unrecognised code degrades to this, never throws.
     public const string Other = "other";
 
-    // Class kinds (later slices populate these).
+    // Class kinds.
     public const string StepClass = "step_class";
     public const string PageObject = "page_object";
     public const string ApiClient = "api_client";
@@ -19,11 +19,42 @@ public static class Kinds
     public const string HookClass = "hook_class";
     public const string Helper = "helper";
 
+    // Method kinds.
+    public const string StepDefinitionMethod = "step_definition";
+    public const string HookMethod = "hook";
+    public const string TestMethod = "test_method";
+    public const string PageObjectMethod = "page_object_method";
+    public const string ApiMethod = "api_method";
+    public const string HelperMethod = "helper_method";
+
     // Project-kind summaries.
     public const string BddTests = "bdd_tests";
     public const string UnitTests = "unit_tests";
     public const string SharedLibrary = "shared_library";
 }
+
+/// <summary>How a step-definition expression is interpreted (spec §5.1).</summary>
+public static class ExpressionKinds
+{
+    public const string Regex = "regex";
+    public const string CucumberExpression = "cucumber_expression";
+}
+
+/// <summary>
+/// A step-definition binding (spec §5.1): one row per binding attribute on a method — a method
+/// with <c>[Given]</c> + <c>[When]</c> yields two rows.
+/// </summary>
+public sealed record StepDefinitionEntity(
+    int Id,
+    int MethodId,
+    int ClassId,
+    int ProjectId,
+    string Keyword,        // Given | When | Then | StepDefinition
+    string Expression,
+    string ExpressionKind, // regex | cucumber_expression
+    string Parameters,     // comma-joined "type name" of the method's parameters
+    string FilePath,
+    int LineStart);
 
 /// <summary>A project in the analysed solution (spec §5.1).</summary>
 public sealed record ProjectEntity(
@@ -92,6 +123,7 @@ public sealed record IndexResult(
     IReadOnlyList<ProjectEntity> Projects,
     IReadOnlyList<ClassEntity> Classes,
     IReadOnlyList<MethodEntity> Methods,
+    IReadOnlyList<StepDefinitionEntity> StepDefinitions,
     IReadOnlyList<DiagnosticEntity> Diagnostics,
     IndexOutcome Outcome);
 

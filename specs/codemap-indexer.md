@@ -204,6 +204,13 @@ Unknown config keys are a warning, not an error (forward compatibility).
   never observes a half-written map.
 - Schema documented in `docs/schema.md` in the repo; any breaking change increments
   `user_version` and the changelog states the migration ("re-run `codemap index`").
+- Generated build output (`obj/`, `bin/`) is excluded from extraction, so machine-generated
+  sources (AssemblyInfo, test-runner hooks) don't pollute the map.
+
+**Schema changelog**
+- `user_version = 1` — projects / classes / methods / diagnostics / meta (slice 1).
+- `user_version = 2` — adds the `step_definitions` table and populates real class/method `kind`
+  values (slice 2a). Migration: re-run `codemap index`.
 
 ## 10. Performance targets
 

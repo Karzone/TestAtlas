@@ -10,8 +10,9 @@ public sealed class SqliteMapWriterTests
     private static IndexResult Sample() => new(
         new MapMeta("9.9.9", "2020-01-01T00:00:00Z", "/x/My.sln", new string('a', 64)),
         new[] { new ProjectEntity(1, "P", "P.csproj", "net8.0", Kinds.Other) },
-        new[] { new ClassEntity(1, 1, "C", "N", "Base", Kinds.Other, "C.cs", 1, 3) },
-        new[] { new MethodEntity(1, 1, 1, "M", "M()", "public", Kinds.Other, "C.cs", 2, 2) },
+        new[] { new ClassEntity(1, 1, "C", "N", "Base", Kinds.StepClass, "C.cs", 1, 3) },
+        new[] { new MethodEntity(1, 1, 1, "M", "M()", "public", Kinds.StepDefinitionMethod, "C.cs", 2, 2) },
+        new[] { new StepDefinitionEntity(1, 1, 1, 1, "Given", "a thing", ExpressionKinds.Regex, "", "C.cs", 2) },
         Array.Empty<DiagnosticEntity>(),
         IndexOutcome.Success);
 
@@ -51,6 +52,10 @@ public sealed class SqliteMapWriterTests
         Assert.Equal("Base", c.BaseType);
         var m = Assert.Single(doc.Methods);
         Assert.Equal("M()", m.Signature);
+        var s = Assert.Single(doc.StepDefinitions);
+        Assert.Equal("Given", s.Keyword);
+        Assert.Equal("a thing", s.Expression);
+        Assert.Equal(ExpressionKinds.Regex, s.ExpressionKind);
         Assert.Equal("9.9.9", doc.Meta[MapSchema.MetaToolVersion]);
     }
 }

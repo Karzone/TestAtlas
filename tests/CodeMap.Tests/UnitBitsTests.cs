@@ -7,12 +7,77 @@ namespace TestAtlas.Tests;
 /// <summary>Small pure-logic units: the classifier's never-throw contract and the glob filter.</summary>
 public sealed class ClassifierTests
 {
+    private static ClassFacts CF(string name, string? baseType = null, bool binding = false,
+        bool testClass = false, int methods = 0, int stepM = 0, int testM = 0, int hookM = 0,
+        int instMembers = 0, int uiMembers = 0, int apiMembers = 0, bool refUi = false, bool refApi = false)
+        => new(name, baseType, binding, testClass, methods, stepM, testM, hookM,
+            instMembers, uiMembers, apiMembers, refUi, refApi);
+
+    private static string Classify(ClassFacts f, Func<string?, string?>? baseKind = null)
+        => Classifier.ClassifyClass(f, ClassifierOptions.Default, baseKind ?? (_ => null));
+
+    [Theory]
+    // step class — [Binding] or a step-attributed method
+    [InlineData("S1", true, false, 0, 0, 0, 0, 0, 0, 0, false, false, Kinds.StepClass)]
+    // page object — ≥50% of instance members reference a UI type
+    [InlineData("Navigator", false, false, 0, 0, 0, 0, 2, 1, 0, false, false, Kinds.PageObject)]
+    // api client — name suffix + references RestSharp/HttpClient
+    [InlineData("AccountClient", false, false, 0, 0, 0, 0, 0, 0, 0, false, true, Kinds.ApiClient)]
+    // api client — ≥50% of methods reference an API type
+    [InlineData("Gateway", false, false, 2, 0, 0, 0, 0, 0, 1, false, false, Kinds.ApiClient)]
+    // test class — [TestFixture]/[TestClass]
+    [InlineData("T1", false, true, 0, 0, 0, 0, 0, 0, 0, false, false, Kinds.TestClass)]
+    // test class — a test-attributed method
+    [InlineData("T2", false, false, 0, 0, 1, 0, 0, 0, 0, false, false, Kinds.TestClass)]
+    // hook class — a hook-attributed method, nothing else
+    [InlineData("Hooks", false, false, 0, 0, 0, 1, 0, 0, 0, false, false, Kinds.HookClass)]
+    // plain
+    [InlineData("Plain", false, false, 3, 0, 0, 0, 3, 0, 0, false, false, Kinds.Other)]
+    public void Classifies_classes(string name, bool binding, bool testClass, int methods, int stepM,
+        int testM, int hookM, int instMembers, int uiMembers, int apiMembers, bool refUi, bool refApi, string expected)
+        => Assert.Equal(expected, Classify(CF(name, binding: binding, testClass: testClass, methods: methods,
+            stepM: stepM, testM: testM, hookM: hookM, instMembers: instMembers, uiMembers: uiMembers,
+            apiMembers: apiMembers, refUi: refUi, refApi: refApi)));
+
     [Fact]
-    public void Classify_degrades_to_other_and_never_throws()
+    public void Page_object_by_name_suffix_needs_a_ui_reference()
     {
-        // Slice-1 stub + the G2 constraint: unrecognised input yields "other", never an exception.
-        Assert.Equal(Kinds.Other, Classifier.ClassifyClass(null, null));
-        Assert.Equal(Kinds.Other, Classifier.ClassifyMethod(null, null));
+        Assert.Equal(Kinds.PageObject, Classify(CF("LoginPage", refUi: true)));
+        Assert.Equal(Kinds.Other, Classify(CF("LoginPage", refUi: false))); // suffix alone isn't enough
+    }
+
+    [Fact]
+    public void Inherits_a_page_object()
+        => Assert.Equal(Kinds.PageObject,
+            Classify(CF("SpecialPanel", baseType: "BasePage"),
+                     baseKind: n => n == "BasePage" ? Kinds.PageObject : null));
+
+    [Fact]
+    public void Step_class_wins_over_page_object_when_both_apply()
+        => Assert.Equal(Kinds.StepClass, Classify(CF("UiSteps", binding: true, instMembers: 2, uiMembers: 2)));
+
+    [Theory]
+    [InlineData(true, false, false, Kinds.PageObject, Kinds.StepDefinitionMethod)]
+    [InlineData(false, true, false, Kinds.PageObject, Kinds.HookMethod)]
+    [InlineData(false, false, true, Kinds.ApiClient, Kinds.TestMethod)]
+    [InlineData(false, false, false, Kinds.PageObject, Kinds.PageObjectMethod)]
+    [InlineData(false, false, false, Kinds.ApiClient, Kinds.ApiMethod)]
+    [InlineData(false, false, false, Kinds.Other, Kinds.Other)]
+    public void Classifies_methods(bool step, bool hook, bool test, string classKind, string expected)
+        => Assert.Equal(expected, Classifier.ClassifyMethod(new MethodFacts(step, hook, test), classKind));
+
+    [Theory]
+    [InlineData("a cart with {int} items", ExpressionKinds.Regex, ExpressionKinds.CucumberExpression)]  // {int} wins
+    [InlineData("a user named (.*)", ExpressionKinds.CucumberExpression, ExpressionKinds.Regex)]          // metachars ⇒ regex
+    [InlineData("the dashboard is shown", ExpressionKinds.Regex, ExpressionKinds.Regex)]                  // literal ⇒ default
+    [InlineData("the dashboard is shown", ExpressionKinds.CucumberExpression, ExpressionKinds.CucumberExpression)]
+    public void Detects_expression_kind(string expr, string frameworkDefault, string expected)
+        => Assert.Equal(expected, Classifier.DetectExpressionKind(expr, frameworkDefault));
+
+    [Fact]
+    public void Never_throws_on_odd_input()
+    {
+        Assert.Equal(Kinds.Other, Classifier.ClassifyMethod(new MethodFacts(false, false, false), "nonsense-kind"));
         Assert.Equal(Kinds.Other, Classifier.SummariseProject(Array.Empty<ClassEntity>()));
     }
 }

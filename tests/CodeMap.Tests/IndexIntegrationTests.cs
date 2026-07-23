@@ -51,6 +51,7 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     {
         var loginSteps = _fx.Doc.Classes.Single(c => c.Name == "LoginSteps");
 
+        Assert.Equal(Kinds.StepClass, loginSteps.Kind); // carries [Binding]
         Assert.Equal("Fixture.SpecFlow", loginSteps.Namespace);
         Assert.EndsWith("SpecFlow/LoginSteps.cs", loginSteps.FilePath.Replace('\\', '/'));
 
@@ -71,18 +72,44 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
-    public void Page_object_shaped_class_without_Page_suffix_is_captured()
+    public void Page_object_without_Page_suffix_is_detected_by_its_UI_types()
     {
-        // Slice 1 classifies it as "other"; the point here is that a Page-less page object is
-        // still extracted with its methods so slice-2 detection has something to reclassify.
+        // Navigator has no "Page" suffix — it's classified as a page object purely because ≥50% of
+        // its instance members reference Playwright types (IPage/ILocator). Its methods inherit
+        // page_object_method.
         var navigator = _fx.Doc.Classes.Single(c => c.Name == "Navigator");
         Assert.Equal("Fixture.SpecFlow", navigator.Namespace);
-        Assert.Equal(Kinds.Other, navigator.Kind);
+        Assert.Equal(Kinds.PageObject, navigator.Kind);
 
         var methods = MethodsIn(navigator.ProjectId)
             .Where(m => m.ClassId == navigator.Id)
-            .Select(m => m.Name).OrderBy(n => n).ToArray();
-        Assert.Equal(new[] { "EnterUsername", "NavigateToLogin" }, methods);
+            .ToList();
+        Assert.Equal(new[] { "EnterUsername", "NavigateToLogin" }, methods.Select(m => m.Name).OrderBy(n => n).ToArray());
+        Assert.All(methods, m => Assert.Equal(Kinds.PageObjectMethod, m.Kind));
+    }
+
+    [Fact]
+    public void Step_definitions_are_extracted_with_keyword_and_expression_kind()
+    {
+        // 5 in LoginSteps + 3 in CheckoutSteps.
+        Assert.Equal(8, _fx.Doc.StepDefinitions.Count);
+        Assert.All(_fx.Doc.Classes.Where(c => c.Name is "LoginSteps" or "CheckoutSteps"),
+            c => Assert.Equal(Kinds.StepClass, c.Kind));
+
+        // A SpecFlow regex binding.
+        var named = _fx.Doc.StepDefinitions.Single(s => s.Expression == "a user named (.*)");
+        Assert.Equal("Given", named.Keyword);
+        Assert.Equal(ExpressionKinds.Regex, named.ExpressionKind);
+
+        // A Reqnroll cucumber binding, with its parameter captured.
+        var cart = _fx.Doc.StepDefinitions.Single(s => s.Expression == "a cart with {int} item(s)");
+        Assert.Equal("Given", cart.Keyword);
+        Assert.Equal(ExpressionKinds.CucumberExpression, cart.ExpressionKind);
+        Assert.Contains("int", cart.Parameters);
+
+        // The method those bindings hang off is a step_definition.
+        var m = _fx.Doc.Methods.Single(x => x.Name == "GivenAUserNamed");
+        Assert.Equal(Kinds.StepDefinitionMethod, m.Kind);
     }
 
     [Fact]

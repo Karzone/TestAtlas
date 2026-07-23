@@ -84,6 +84,7 @@ public sealed class SolutionIndexer
                 Array.Empty<ProjectEntity>(),
                 Array.Empty<ClassEntity>(),
                 Array.Empty<MethodEntity>(),
+                Array.Empty<StepDefinitionEntity>(),
                 diagnostics,
                 IndexOutcome.Fatal);
         }
@@ -112,11 +113,16 @@ public sealed class SolutionIndexer
             if (project.FilePath is { } pf && File.Exists(pf))
                 hasher.Add(ToRelative(rootDir, pf), SafeRead(pf));
 
+            var projectDir = project.FilePath is { } pdir
+                ? Path.GetDirectoryName(SafeFullPath(pdir)) ?? rootDir
+                : rootDir;
+
             foreach (var document in project.Documents)
             {
                 ct.ThrowIfCancellationRequested();
                 if (document.FilePath is not { } docPath) continue;
                 if (!docPath.EndsWith(".cs", StringComparison.OrdinalIgnoreCase)) continue;
+                if (IsGeneratedOutput(projectDir, docPath)) continue; // skip obj/ + bin/ (spec §6 finding)
 
                 var relDoc = ToRelative(rootDir, docPath);
                 if (File.Exists(docPath)) hasher.Add(relDoc, SafeRead(docPath));
@@ -147,13 +153,46 @@ public sealed class SolutionIndexer
             diagnostics.Add(new DiagnosticEntity(severity, code, message, path));
         }
 
+        // ---- Classify (spec §6): class kinds with an inheritance fixpoint, then method kinds ----
+        var allClasses = projectHolders.SelectMany(p => p.Classes).ToList();
+        var classifierOptions = ClassifierOptions.Default;
+
+        foreach (var ch in allClasses)
+            ch.Kind = ch.Facts is { } f ? Classifier.ClassifyClass(f, classifierOptions, _ => null) : Kinds.Other;
+
+        // Resolve inherits-a-page-object / -api-client to a fixpoint (kinds only ever upgrade).
+        for (var pass = 0; pass < 10; pass++)
+        {
+            var kindByName = allClasses
+                .Where(c => c.Kind is Kinds.PageObject or Kinds.ApiClient)
+                .GroupBy(c => c.Name, StringComparer.Ordinal)
+                .ToDictionary(g => g.Key, g => g.First().Kind, StringComparer.Ordinal);
+
+            string? BaseKind(string? baseName)
+                => baseName is not null && kindByName.TryGetValue(baseName, out var k) ? k : null;
+
+            var changed = false;
+            foreach (var ch in allClasses.Where(c => c.Kind == Kinds.Other && c.Facts is not null))
+            {
+                var k = Classifier.ClassifyClass(ch.Facts!, classifierOptions, BaseKind);
+                if (k != Kinds.Other) { ch.Kind = k; changed = true; }
+            }
+            if (!changed) break;
+        }
+
+        foreach (var ch in allClasses)
+            foreach (var mh in ch.Methods)
+                mh.Kind = mh.Facts is { } mf ? Classifier.ClassifyMethod(mf, ch.Kind) : Kinds.Other;
+
         // ---- Assign deterministic IDs in canonical order ----
         var projects = new List<ProjectEntity>();
         var classes = new List<ClassEntity>();
         var methods = new List<MethodEntity>();
+        var stepDefs = new List<StepDefinitionEntity>();
         var projectId = 0;
         var classId = 0;
         var methodId = 0;
+        var stepDefId = 0;
 
         foreach (var ph in projectHolders) // already ordered by (Name, Path)
         {
@@ -167,17 +206,16 @@ public sealed class SolutionIndexer
                 .ThenBy(c => c.LineStart)
                 .ToList();
 
-            projects.Add(new ProjectEntity(
-                pid, ph.Name, ph.Path, ph.TargetFramework,
-                Classifier.SummariseProject(Enumerable.Empty<ClassEntity>())));
+            var projClasses = new List<ClassEntity>();
 
             foreach (var ch in orderedClasses)
             {
                 classId++;
                 var cid = classId;
-                classes.Add(new ClassEntity(
+                var ce = new ClassEntity(
                     cid, pid, ch.Name, ch.Namespace, ch.BaseType, ch.Kind,
-                    ch.FilePath, ch.LineStart, ch.LineEnd));
+                    ch.FilePath, ch.LineStart, ch.LineEnd);
+                projClasses.Add(ce);
 
                 var orderedMethods = ch.Methods
                     .OrderBy(m => m.Name, StringComparer.Ordinal)
@@ -188,11 +226,26 @@ public sealed class SolutionIndexer
                 foreach (var mh in orderedMethods)
                 {
                     methodId++;
+                    var mid = methodId;
                     methods.Add(new MethodEntity(
-                        methodId, cid, pid, mh.Name, mh.Signature, mh.Visibility, mh.Kind,
+                        mid, cid, pid, mh.Name, mh.Signature, mh.Visibility, mh.Kind,
                         mh.FilePath, mh.LineStart, mh.LineEnd));
+
+                    foreach (var sb in mh.StepBindings
+                        .OrderBy(s => s.Keyword, StringComparer.Ordinal)
+                        .ThenBy(s => s.Expression, StringComparer.Ordinal))
+                    {
+                        stepDefId++;
+                        stepDefs.Add(new StepDefinitionEntity(
+                            stepDefId, mid, cid, pid, sb.Keyword, sb.Expression, sb.ExpressionKind,
+                            sb.Parameters, mh.FilePath, mh.LineStart));
+                    }
                 }
             }
+
+            projects.Add(new ProjectEntity(
+                pid, ph.Name, ph.Path, ph.TargetFramework, Classifier.SummariseProject(projClasses)));
+            classes.AddRange(projClasses);
         }
 
         // ---- Outcome (spec §7 exit-code contract) ----
@@ -215,7 +268,7 @@ public sealed class SolutionIndexer
                 : IndexOutcome.Success;
 
         var meta = new MapMeta(ToolVersion, FormatUtc(_nowUtc()), fullPath, hasher.Compute());
-        return new IndexResult(meta, projects, classes, methods, diagnostics, outcome);
+        return new IndexResult(meta, projects, classes, methods, stepDefs, diagnostics, outcome);
     }
 
     private static async Task ExtractDocumentAsync(
@@ -225,17 +278,18 @@ public sealed class SolutionIndexer
         {
             if (await document.GetSyntaxRootAsync(ct) is not { } root) return;
             var tree = root.SyntaxTree;
+            var exprDefault = SyntaxScan.FrameworkExpressionDefault(root);
 
             foreach (var type in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
             {
                 // LineStart points at the declared name (the `class X` line), not any leading
-                // attribute; LineEnd is the closing brace.
+                // attribute; LineEnd is the closing brace. Kind is assigned in a later pass.
                 var ch = new ClassHolder
                 {
                     Name = type.Identifier.ValueText,
                     Namespace = ResolveNamespace(type),
                     BaseType = type.BaseList?.Types.FirstOrDefault()?.Type.ToString(),
-                    Kind = Classifier.ClassifyClass(type, model: null),
+                    Facts = SyntaxScan.GatherClassFacts(type),
                     FilePath = relDoc,
                     LineStart = tree.GetLineSpan(type.Identifier.Span).StartLinePosition.Line + 1,
                     LineEnd = tree.GetLineSpan(type.Span).EndLinePosition.Line + 1,
@@ -243,16 +297,31 @@ public sealed class SolutionIndexer
 
                 foreach (var method in type.Members.OfType<MethodDeclarationSyntax>())
                 {
-                    ch.Methods.Add(new MethodHolder
+                    var mh = new MethodHolder
                     {
                         Name = method.Identifier.ValueText,
                         Signature = BuildSignature(method),
                         Visibility = ResolveVisibility(method.Modifiers, memberDefaultPrivate: true),
-                        Kind = Classifier.ClassifyMethod(method, model: null),
+                        Facts = SyntaxScan.GatherMethodFacts(method),
                         FilePath = relDoc,
                         LineStart = tree.GetLineSpan(method.Identifier.Span).StartLinePosition.Line + 1,
                         LineEnd = tree.GetLineSpan(method.Span).EndLinePosition.Line + 1,
-                    });
+                    };
+
+                    var parameters = string.Join(", ", method.ParameterList.Parameters
+                        .Select(p => $"{p.Type} {p.Identifier.ValueText}".Trim()));
+                    foreach (var (keyword, expression) in SyntaxScan.StepBindings(method))
+                    {
+                        mh.StepBindings.Add(new StepBindingHolder
+                        {
+                            Keyword = keyword,
+                            Expression = expression,
+                            ExpressionKind = Classifier.DetectExpressionKind(expression, exprDefault),
+                            Parameters = parameters,
+                        });
+                    }
+
+                    ch.Methods.Add(mh);
                 }
 
                 holder.Classes.Add(ch);
@@ -270,6 +339,23 @@ public sealed class SolutionIndexer
                 LineStart = 0,
                 LineEnd = 0,
             });
+        }
+    }
+
+    /// <summary>True if the document lives under the project's <c>obj/</c> or <c>bin/</c> tree.</summary>
+    private static bool IsGeneratedOutput(string projectDir, string docFullPath)
+    {
+        try
+        {
+            var rel = Path.GetRelativePath(projectDir, SafeFullPath(docFullPath)).Replace('\\', '/');
+            return rel.StartsWith("obj/", StringComparison.OrdinalIgnoreCase)
+                || rel.StartsWith("bin/", StringComparison.OrdinalIgnoreCase)
+                || rel.Contains("/obj/", StringComparison.OrdinalIgnoreCase)
+                || rel.Contains("/bin/", StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return false;
         }
     }
 
@@ -403,6 +489,7 @@ public sealed class SolutionIndexer
         public string Namespace = string.Empty;
         public string? BaseType;
         public string Kind = Kinds.Other;
+        public ClassFacts? Facts;
         public string FilePath = string.Empty;
         public int LineStart;
         public int LineEnd;
@@ -415,8 +502,18 @@ public sealed class SolutionIndexer
         public string Signature = string.Empty;
         public string Visibility = "private";
         public string Kind = Kinds.Other;
+        public MethodFacts? Facts;
         public string FilePath = string.Empty;
         public int LineStart;
         public int LineEnd;
+        public List<StepBindingHolder> StepBindings { get; } = new();
+    }
+
+    private sealed class StepBindingHolder
+    {
+        public string Keyword = string.Empty;
+        public string Expression = string.Empty;
+        public string ExpressionKind = ExpressionKinds.Regex;
+        public string Parameters = string.Empty;
     }
 }
