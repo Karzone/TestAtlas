@@ -169,6 +169,10 @@ public static class Commands
         Console.WriteLine($"unbound steps: {unbound}");
         Console.WriteLine($"ambiguous bindings: {ambiguousSteps}");
 
+        var inherits = doc.Edges.Count(e => e.EdgeKind == EdgeKinds.Inherits);
+        var usesType = doc.Edges.Count(e => e.EdgeKind == EdgeKinds.UsesType);
+        Console.WriteLine($"structural edges: {inherits} inherits, {usesType} uses_type");
+
         var errors = doc.Diagnostics.Count(d => d.Severity == "error");
         var warnings = doc.Diagnostics.Count(d => d.Severity == "warning");
         Console.WriteLine($"diagnostics: {doc.Diagnostics.Count} ({errors} error(s), {warnings} warning(s))");

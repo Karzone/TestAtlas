@@ -137,6 +137,8 @@ public static class EdgeKinds
 {
     public const string BindsTo = "binds_to";
     public const string Unbound = "unbound";
+    public const string Inherits = "inherits";   // Class → Class (base type within the solution)
+    public const string UsesType = "uses_type";  // Method → Class (constructs/receives/dereferences it)
 }
 
 /// <summary>from/to entity-kind labels used in the edges table.</summary>
@@ -144,6 +146,8 @@ public static class RefKinds
 {
     public const string ScenarioStep = "scenario_step";
     public const string StepDefinition = "step_definition";
+    public const string Class = "class";
+    public const string Method = "method";
 }
 
 /// <summary>binds_to confidence (spec §5.2).</summary>

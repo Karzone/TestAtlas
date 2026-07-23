@@ -8,11 +8,16 @@ namespace Fixture.SpecFlow
     [Binding]
     public class LoginSteps
     {
+        // A page object held as a field and dereferenced below — the dominant test-automation
+        // pattern. It drives the `uses_type` edge WhenTheySignIn -> LoginPage (spec §5.2). Adding a
+        // field (not a method) keeps LoginSteps' method count at exactly 5.
+        private readonly LoginPage _loginPage = new LoginPage(null, null);
+
         [Given(@"a user named (.*)")]
         public void GivenAUserNamed(string name) { }
 
         [When(@"they sign in")]
-        public void WhenTheySignIn() { }
+        public void WhenTheySignIn() { _loginPage.Open(); }
 
         [Then(@"the dashboard is shown")]
         public void ThenTheDashboardIsShown() { }

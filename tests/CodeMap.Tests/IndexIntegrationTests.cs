@@ -22,8 +22,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     public void Yields_exact_project_class_method_counts()
     {
         Assert.Equal(2, _fx.Doc.Projects.Count);
-        Assert.Equal(15, _fx.Doc.Classes.Count);
-        Assert.Equal(10, _fx.Doc.Methods.Count);
+        Assert.Equal(16, _fx.Doc.Classes.Count);
+        Assert.Equal(11, _fx.Doc.Methods.Count);
         Assert.Empty(_fx.Doc.Diagnostics);
     }
 
@@ -40,8 +40,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
         var specflow = ProjectByName("Fixture.SpecFlow");
         var reqnroll = ProjectByName("Fixture.Reqnroll");
 
-        Assert.Equal(9, ClassesIn(specflow).Count);
-        Assert.Equal(7, MethodsIn(specflow).Count);
+        Assert.Equal(10, ClassesIn(specflow).Count);
+        Assert.Equal(8, MethodsIn(specflow).Count);
         Assert.Equal(6, ClassesIn(reqnroll).Count);
         Assert.Equal(3, MethodsIn(reqnroll).Count);
     }
@@ -198,6 +198,45 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
 
         // And it discriminates: a token in no step definition returns nothing.
         Assert.Empty(MapReader.SearchSteps(_fx.DbPath, "zzzznope"));
+    }
+
+    [Fact]
+    public void Inherits_edge_links_a_derived_class_to_its_base()
+    {
+        var loginPage = _fx.Doc.Classes.Single(c => c.Name == "LoginPage");
+        var navigator = _fx.Doc.Classes.Single(c => c.Name == "Navigator");
+
+        var edge = _fx.Doc.Edges.Single(e => e.EdgeKind == EdgeKinds.Inherits && e.FromId == loginPage.Id);
+        Assert.Equal(RefKinds.Class, edge.FromKind);
+        Assert.Equal(RefKinds.Class, edge.ToKind);
+        Assert.Equal(navigator.Id, edge.ToId);
+        Assert.Equal(BindConfidence.Exact, edge.Confidence);
+
+        // LoginPage is a page object *because* it derives from one (classification heuristic #3).
+        Assert.Equal(Kinds.PageObject, loginPage.Kind);
+    }
+
+    [Fact]
+    public void Uses_type_edge_links_a_step_method_to_the_page_object_it_drives()
+    {
+        // WhenTheySignIn dereferences a `LoginPage _loginPage` field — the field-type pattern.
+        var signIn = _fx.Doc.Methods.Single(m => m.Name == "WhenTheySignIn");
+        var loginPage = _fx.Doc.Classes.Single(c => c.Name == "LoginPage");
+
+        var edge = _fx.Doc.Edges.Single(e => e.EdgeKind == EdgeKinds.UsesType && e.FromId == signIn.Id);
+        Assert.Equal(RefKinds.Method, edge.FromKind);
+        Assert.Equal(RefKinds.Class, edge.ToKind);
+        Assert.Equal(loginPage.Id, edge.ToId);
+        Assert.Equal(BindConfidence.Exact, edge.Confidence);
+    }
+
+    [Fact]
+    public void Structural_edge_tallies_match_the_fixture()
+    {
+        // Exactly one of each. Vacuity: the many shim classes deriving from System.Attribute — an
+        // external base outside the solution — must produce NO inherits edge.
+        Assert.Equal(1, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.Inherits));
+        Assert.Equal(1, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.UsesType));
     }
 
     [Fact]

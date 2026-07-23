@@ -106,6 +106,16 @@ A single `edges` table: `(from_kind, from_id, to_kind, to_id, edge_kind, confide
 | `uses_type` | Method → Class | Method constructs, receives, or dereferences the class (how step classes reach page objects/API clients) |
 | `inherits` | Class → Class | Base-type relationship within the solution |
 
+**Implementation status.** `binds_to` / `unbound` (slice 2b) and `inherits` / `uses_type` (slice 3)
+are built. All are resolved **syntactically** — by simple type name across the solution — to preserve
+the "works on unrestored projects" guarantee (G3): `inherits` matches a class's base-type name to a
+solution class; `uses_type` matches the type-names a method mentions (parameter/return/`new`/local
+types and the types of dereferenced fields/properties) to the **page-object / API-client** classes it
+drives, keeping the edge set bounded and signal-rich on large solutions. A name resolving to more than
+one class is recorded as `ambiguous`; a name resolving outside the solution produces no edge.
+`calls` (Method → Method) is **deferred** — reliable target resolution across overloads needs the
+Roslyn semantic model (a restored compilation), which the syntax-only pipeline deliberately avoids.
+
 ### 5.3 Full-text search
 
 Two FTS5 virtual tables, populated at index time:

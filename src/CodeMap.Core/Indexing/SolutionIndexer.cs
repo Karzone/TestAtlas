@@ -225,6 +225,10 @@ public sealed class SolutionIndexer
         var scenarioId = 0;
         var scenarioStepId = 0;
 
+        // Structural-edge inputs, gathered as IDs are assigned (resolved after the loop, spec §5.2).
+        var classInherits = new List<(int ClassId, string BaseName)>();
+        var methodUses = new List<(int MethodId, int ClassId, HashSet<string> Names)>();
+
         foreach (var ph in projectHolders) // already ordered by (Name, Path)
         {
             projectId++;
@@ -248,6 +252,9 @@ public sealed class SolutionIndexer
                     ch.FilePath, ch.LineStart, ch.LineEnd);
                 projClasses.Add(ce);
 
+                if (ch.Facts?.BaseTypeName is { Length: > 0 } baseName)
+                    classInherits.Add((cid, baseName));
+
                 var orderedMethods = ch.Methods
                     .OrderBy(m => m.Name, StringComparer.Ordinal)
                     .ThenBy(m => m.Signature, StringComparer.Ordinal)
@@ -261,6 +268,9 @@ public sealed class SolutionIndexer
                     methods.Add(new MethodEntity(
                         mid, cid, pid, mh.Name, mh.Signature, mh.Visibility, mh.Kind,
                         mh.FilePath, mh.LineStart, mh.LineEnd));
+
+                    if (mh.UsedTypeNames.Count > 0)
+                        methodUses.Add((mid, cid, mh.UsedTypeNames));
 
                     foreach (var sb in mh.StepBindings
                         .OrderBy(s => s.Keyword, StringComparer.Ordinal)
@@ -309,6 +319,9 @@ public sealed class SolutionIndexer
 
         // ---- binds_to: resolve each scenario step against its project's step definitions (spec §5.2) ----
         var edges = BuildBindingEdges(stepDefs, scenarioSteps);
+
+        // ---- inherits / uses_type: the structural graph linking classes + their collaborators ----
+        edges.AddRange(BuildStructuralEdges(classes, classInherits, methodUses));
 
         // ---- Outcome (spec §7 exit-code contract) ----
         var loadedCount = selected.Count;
@@ -384,6 +397,66 @@ public sealed class SolutionIndexer
         return edges;
     }
 
+    /// <summary>
+    /// Resolve the syntactic structural signals into edges (spec §5.2): a class's base type to a
+    /// solution class (<c>inherits</c>), and a method's used type-names to the page-object / API-client
+    /// classes it drives (<c>uses_type</c>). Name resolution is by simple class name across the whole
+    /// solution; a name matching more than one class is recorded as <c>ambiguous</c>. External types
+    /// (base classes / collaborators outside the solution) simply produce no edge. Emitted in a
+    /// canonical order so two runs over identical input are byte-identical.
+    /// </summary>
+    private static List<EdgeEntity> BuildStructuralEdges(
+        IReadOnlyList<ClassEntity> classes,
+        IReadOnlyList<(int ClassId, string BaseName)> classInherits,
+        IReadOnlyList<(int MethodId, int ClassId, HashSet<string> Names)> methodUses)
+    {
+        var edges = new List<EdgeEntity>();
+
+        var idsByName = classes
+            .GroupBy(c => c.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(c => c.Id).OrderBy(i => i).ToList(), StringComparer.Ordinal);
+
+        // uses_type targets are deliberately limited to the collaborators the map is about — page
+        // objects and API clients — which keeps the edge set signal-rich and bounded on huge solutions.
+        var collaboratorIdsByName = classes
+            .Where(c => c.Kind is Kinds.PageObject or Kinds.ApiClient)
+            .GroupBy(c => c.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.Select(c => c.Id).OrderBy(i => i).ToList(), StringComparer.Ordinal);
+
+        foreach (var (classId, baseName) in classInherits)
+        {
+            if (!idsByName.TryGetValue(baseName, out var all)) continue;
+            var targets = all.Where(t => t != classId).ToList(); // never a self-edge
+            if (targets.Count == 0) continue;
+            var conf = targets.Count == 1 ? BindConfidence.Exact : BindConfidence.Ambiguous;
+            foreach (var t in targets)
+                edges.Add(new EdgeEntity(RefKinds.Class, classId, RefKinds.Class, t, EdgeKinds.Inherits, conf));
+        }
+
+        foreach (var (methodId, classId, names) in methodUses)
+        {
+            // (targetClassId → ambiguous?) so a target reached through an ambiguous name is marked so.
+            var targets = new SortedDictionary<int, bool>();
+            foreach (var name in names)
+            {
+                if (!collaboratorIdsByName.TryGetValue(name, out var ids)) continue;
+                var real = ids.Where(id => id != classId).ToList(); // ignore self-references
+                var ambiguous = real.Count > 1;
+                foreach (var id in real)
+                    targets[id] = targets.TryGetValue(id, out var was) ? was || ambiguous : ambiguous;
+            }
+            foreach (var (targetId, ambiguous) in targets)
+                edges.Add(new EdgeEntity(RefKinds.Method, methodId, RefKinds.Class, targetId, EdgeKinds.UsesType,
+                    ambiguous ? BindConfidence.Ambiguous : BindConfidence.Exact));
+        }
+
+        return edges
+            .OrderBy(e => e.EdgeKind, StringComparer.Ordinal)
+            .ThenBy(e => e.FromId)
+            .ThenBy(e => e.ToId ?? 0)
+            .ToList();
+    }
+
     private static BindingKeyword ToBindingKeyword(string keyword) => keyword switch
     {
         "Given" => BindingKeyword.Given,
@@ -445,6 +518,7 @@ public sealed class SolutionIndexer
                         FilePath = relDoc,
                         LineStart = tree.GetLineSpan(method.Identifier.Span).StartLinePosition.Line + 1,
                         LineEnd = tree.GetLineSpan(method.Span).EndLinePosition.Line + 1,
+                        UsedTypeNames = SyntaxScan.UsedTypeNames(method, type),
                     };
 
                     var parameters = string.Join(", ", method.ParameterList.Parameters
@@ -652,6 +726,7 @@ public sealed class SolutionIndexer
         public string FilePath = string.Empty;
         public int LineStart;
         public int LineEnd;
+        public HashSet<string> UsedTypeNames = new(StringComparer.Ordinal);
         public List<StepBindingHolder> StepBindings { get; } = new();
     }
 

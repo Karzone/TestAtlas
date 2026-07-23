@@ -116,6 +116,74 @@ internal static class SyntaxScan
         return ExpressionKinds.Regex; // SpecFlow-style regex is the safer historical default
     }
 
+    /// <summary>
+    /// Simple type-names a method uses (spec §5.2 <c>uses_type</c>): its parameter/return types, the
+    /// types it constructs (<c>new Foo()</c>) or declares locally, and — the dominant test-automation
+    /// pattern — the types of the containing class's fields/properties it dereferences by name (e.g. a
+    /// step method calling <c>_loginPage.Open()</c>). Purely syntactic, so it holds up unrestored.
+    /// </summary>
+    public static HashSet<string> UsedTypeNames(MethodDeclarationSyntax method, TypeDeclarationSyntax containingType)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+
+        foreach (var t in TypeIdentifiers(method.ReturnType)) names.Add(t);
+        foreach (var p in method.ParameterList.Parameters)
+            foreach (var t in TypeIdentifiers(p.Type)) names.Add(t);
+
+        SyntaxNode? body = method.Body;
+        body ??= method.ExpressionBody;
+        if (body is null) return names;
+
+        foreach (var oc in body.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+            foreach (var t in TypeIdentifiers(oc.Type)) names.Add(t);
+        foreach (var vd in body.DescendantNodes().OfType<VariableDeclarationSyntax>())
+            foreach (var t in TypeIdentifiers(vd.Type)) names.Add(t);
+
+        var memberTypes = MemberTypes(containingType);
+        if (memberTypes.Count > 0)
+            foreach (var id in body.DescendantNodes().OfType<IdentifierNameSyntax>())
+                if (memberTypes.TryGetValue(id.Identifier.ValueText, out var types))
+                    foreach (var t in types) names.Add(t);
+
+        return names;
+    }
+
+    /// <summary>Field / auto-property member-name → the simple type-names of its declared type.</summary>
+    private static Dictionary<string, string[]> MemberTypes(TypeDeclarationSyntax type)
+    {
+        var map = new Dictionary<string, string[]>(StringComparer.Ordinal);
+        foreach (var member in type.Members)
+        {
+            switch (member)
+            {
+                case FieldDeclarationSyntax f:
+                    var ft = TypeIdentifiers(f.Declaration.Type).ToArray();
+                    foreach (var v in f.Declaration.Variables) map[v.Identifier.ValueText] = ft;
+                    break;
+                case PropertyDeclarationSyntax p:
+                    map[p.Identifier.ValueText] = TypeIdentifiers(p.Type).ToArray();
+                    break;
+            }
+        }
+        return map;
+    }
+
+    /// <summary>All simple identifier names within a type syntax (the type itself + any generic args).</summary>
+    private static IEnumerable<string> TypeIdentifiers(TypeSyntax? type)
+    {
+        if (type is null) yield break;
+        foreach (var node in type.DescendantNodesAndSelf())
+        {
+            var name = node switch
+            {
+                GenericNameSyntax g => g.Identifier.ValueText,
+                IdentifierNameSyntax id => id.Identifier.ValueText,
+                _ => null,
+            };
+            if (name is not null && name != "var") yield return name;
+        }
+    }
+
     /// <summary>Simple name of a base type, stripping namespace qualifier and generic args.</summary>
     public static string? SimpleBaseName(TypeSyntax? type) => type switch
     {
