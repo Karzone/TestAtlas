@@ -177,7 +177,9 @@ public static class Commands
         Console.WriteLine($"structural edges: {inherits} inherits, {usesType} uses_type");
 
         var endpointCalls = doc.Edges.Count(e => e.EdgeKind == EdgeKinds.CallsEndpoint);
-        Console.WriteLine($"endpoints: {doc.Endpoints.Count} ({endpointCalls} call site(s))");
+        var operations = doc.Endpoints.Count(e => !e.Route.Contains('/'));
+        var routes = doc.Endpoints.Count - operations;
+        Console.WriteLine($"endpoints: {doc.Endpoints.Count} ({routes} route(s), {operations} operation(s); {endpointCalls} call site(s))");
 
         var errors = doc.Diagnostics.Count(d => d.Severity == "error");
         var warnings = doc.Diagnostics.Count(d => d.Severity == "warning");

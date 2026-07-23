@@ -210,6 +210,11 @@ public sealed class SolutionIndexer
             foreach (var mh in ch.Methods)
                 mh.Kind = mh.Facts is { } mf ? Classifier.ClassifyMethod(mf, ch.Kind) : Kinds.Other;
 
+        // The HTTP-executing types, resolved after the fixpoint — the gate for operation-level
+        // endpoints: `new Wrapper<Request>()` is an operation only when Wrapper is an api_client.
+        var apiClientNames = new HashSet<string>(
+            allClasses.Where(c => c.Kind == Kinds.ApiClient).Select(c => c.Name), StringComparer.Ordinal);
+
         // ---- Assign deterministic IDs in canonical order ----
         var projects = new List<ProjectEntity>();
         var classes = new List<ClassEntity>();
@@ -276,6 +281,13 @@ public sealed class SolutionIndexer
 
                     foreach (var (verb, route) in mh.EndpointCalls)
                         methodEndpointCalls.Add((mid, verb, route));
+
+                    // Operation-level endpoints: a request type handed to an HTTP-executing generic
+                    // wrapper. The request-type name is the operation identity (no URL at the call
+                    // site); the verb is inferred from its leading verb word (spec §5.1).
+                    foreach (var (wrapper, request) in mh.OperationCandidates)
+                        if (apiClientNames.Contains(wrapper))
+                            methodEndpointCalls.Add((mid, SyntaxScan.VerbFromOperationName(request), request));
 
                     foreach (var sb in mh.StepBindings
                         .OrderBy(s => s.Keyword, StringComparer.Ordinal)
@@ -539,6 +551,7 @@ public sealed class SolutionIndexer
                         LineEnd = tree.GetLineSpan(method.Span).EndLinePosition.Line + 1,
                         UsedTypeNames = SyntaxScan.UsedTypeNames(method, type),
                         EndpointCalls = SyntaxScan.EndpointCalls(method, type),
+                        OperationCandidates = SyntaxScan.GenericOperationCandidates(method),
                     };
 
                     var parameters = string.Join(", ", method.ParameterList.Parameters
@@ -748,6 +761,7 @@ public sealed class SolutionIndexer
         public int LineEnd;
         public HashSet<string> UsedTypeNames = new(StringComparer.Ordinal);
         public List<(string Verb, string Route)> EndpointCalls = new();
+        public List<(string Wrapper, string Request)> OperationCandidates = new();
         public List<StepBindingHolder> StepBindings { get; } = new();
     }
 

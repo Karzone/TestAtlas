@@ -122,6 +122,41 @@ public sealed class ProjectMapBuilderTests
     }
 
     [Fact]
+    public void Panel_data_surfaces_the_api_endpoints_each_project_calls()
+    {
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Projects = new[] { new ProjectRow(1, "Api.Tests", "A.csproj", "net8.0", Kinds.BddTests) },
+            Classes = new[] { new ClassRow(1, 1, "Steps", "N", null, Kinds.StepClass, "A.cs", 1, 3) },
+            Methods = new[] { new MethodRow(1, 1, 1, "M", "M()", "public", Kinds.StepDefinitionMethod, "A.cs", 2, 2) },
+            Endpoints = new[]
+            {
+                new EndpointRow(1, "POST", "/api/orders"),
+                new EndpointRow(2, "GET", "GetSupplierRequest"),
+            },
+            Edges = new[]
+            {
+                new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 1, EdgeKinds.CallsEndpoint, ""),
+                new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 2, EdgeKinds.CallsEndpoint, ""),
+            },
+        };
+        var html = ProjectMapBuilder.Build(doc);
+
+        // The node blob carries the project's endpoints (verb + route), ordered by route — a URL route
+        // and an operation-level one. A calls_endpoint edge never creates a project link (vacuity).
+        Assert.Contains("\"eps\":[", html);
+        Assert.Contains("{\"v\":\"POST\",\"r\":\"/api/orders\"}", html);
+        Assert.Contains("{\"v\":\"GET\",\"r\":\"GetSupplierRequest\"}", html);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "class=\"node "));
+        Assert.DoesNotContain("class=\"edge\"", html);
+
+        // The panel renders an "API endpoints" section with verb badges + an operation tag.
+        Assert.Contains("API endpoints (", html);
+        Assert.Contains("ep-v ep-", html);
+    }
+
+    [Fact]
     public void Handles_a_map_with_no_projects()
     {
         var html = ProjectMapBuilder.Build(new MapDocument { UserVersion = MapSchema.Version });

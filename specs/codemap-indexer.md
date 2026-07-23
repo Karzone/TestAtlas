@@ -96,19 +96,32 @@ and line locations.
 - **Scenario** — name, kind (`scenario | scenario_outline`), tags (own + inherited),
   example-table row count for outlines.
 - **ScenarioStep** — ordered steps within a scenario: keyword, text, docstring/table flag.
-- **Endpoint** — an HTTP endpoint referenced by test code: verb + route template (e.g.
-  `POST /api/orders/{id}`), deduplicated solution-wide on (verb, route). Extracted **syntactically**
-  and solution-agnostically via a ladder: known client shapes (`HttpClient`'s `GetAsync`/
-  `PostAsJsonAsync`/…, `new HttpRequestMessage(HttpMethod.X, …)`, RestSharp's `new RestRequest(…,
-  Method.X)` / `Resource = "…"` assignments, Refit-style `[Get("…")]` attributes), a
-  **verb-as-argument** tier (any invocation passing `HttpMethod.X` / `Method.X` alongside a
-  route-like string — central client wrappers like `ExecuteAsync(HttpMethod.Get, "/x")`), and a
-  **generic fallback** for custom wrappers (an invocation named with a verb word —
-  `Get/Post/Put/Patch/Delete` — passing a strictly route-like literal: starts with `/`, or contains
-  `://` or `/{`). Route arguments may be literals, interpolated strings (holes → `{expr}` template),
-  or `const` / `static readonly` string fields of the containing class. **XPath-shaped strings are
-  rejected** (leading `//`, `text()`-style calls, `/ns:element` segments) — they are selectors, not
-  routes. Fully dynamic URLs degrade to nothing, never an error.
+- **Endpoint** — an API endpoint referenced by test code: verb + route/operation identity,
+  deduplicated solution-wide on (verb, route). Two shapes share the entity, distinguished
+  **structurally** by whether the route contains `/` (a C# type name never can):
+  - **URL routes** (route contains `/`, e.g. `POST /api/orders/{id}`) — extracted **syntactically**
+    and solution-agnostically via a ladder: known client shapes (`HttpClient`'s `GetAsync`/
+    `PostAsJsonAsync`/…, `new HttpRequestMessage(HttpMethod.X, …)`, RestSharp's `new RestRequest(…,
+    Method.X)` / `Resource = "…"` assignments, Refit-style `[Get("…")]` attributes), a
+    **verb-as-argument** tier (any invocation passing `HttpMethod.X` / `Method.X` alongside a
+    route-like string — central client wrappers like `ExecuteAsync(HttpMethod.Get, "/x")`), and a
+    **generic fallback** for custom wrappers (an invocation named with a verb word —
+    `Get/Post/Put/Patch/Delete` — passing a strictly route-like literal: starts with `/`, or contains
+    `://` or `/{`). Route arguments may be literals, interpolated strings (holes → `{expr}` template),
+    or `const` / `static readonly` string fields of the containing class. **XPath-shaped strings are
+    rejected** (leading `//`, `text()`-style calls, `/ns:element` segments) — they are selectors, not
+    routes.
+  - **Operation-level** (route is a bare type name, no `/`) — for frameworks that hide the URL inside
+    a typed request object rather than at the call site (`new BaseRequest<GetUserRequest>()
+    .ExecuteAsync()` — the real 1FrameworkAutomatedTest shape). When a **single-type-argument generic
+    construction** `new Wrapper<Request>()` uses a `Wrapper` classified `api_client` (see §6), the
+    **request type is the operation identity** (route = `GetUserRequest`); the verb is inferred from
+    the leading verb word of the name (`Get…` → GET, `Create…`/`Add…`/`Submit…` → POST, `Update…` →
+    PUT, `Delete…`/`Remove…` → DELETE, else `ANY`, never a guess). The `api_client` gate is the whole
+    filter: `new List<Foo>()` is discarded because `List` is not a solution `api_client`.
+
+  Fully dynamic URLs / unclassified wrappers degrade to nothing, never an error. Call sites become
+  `calls_endpoint` edges either way, so `impact --endpoint` and the report's blast radius are uniform.
 
 ### 5.2 Edges
 
@@ -177,7 +190,15 @@ method with a step attribute.
    send methods;
 2. name matches suffix list (default: `Client`, `Api`, `Service`, `Endpoint`) **and**
    references RestSharp/HttpClient;
-3. inherits from a classified API client.
+3. inherits from a classified API client;
+4. **constructs/wraps** a classified API client (`new <api_client>(…)` anywhere in the class body).
+
+Rules 3–4 propagate `api_client`-ness through the service layer to a fixpoint, so a chain like
+`BaseRequest` (executes RestSharp) → `BaseApiService` (constructs `BaseRequest`) → `*ApiService`
+(inherits `BaseApiService`) is fully recognised — which is both what makes those services visible as
+`uses_type` targets for `impact --class`, and the gate that lets `new BaseRequest<Req>()` register as
+an operation-level endpoint (§5.1). Non-solution generic hosts (`List`, `Task`, …) never resolve to a
+kind, so they never propagate.
 
 **Test class** — carries NUnit/xUnit/MSTest test attributes (and is not a step class).
 
@@ -247,9 +268,11 @@ libraries stand out, coloured by project kind, with hover-to-isolate + pan/zoom.
 pins it** and opens a dependency panel listing what it *depends on* and what *depends on it*, each with
 the underlying link breakdown (e.g. `→ SharedSteps · 340 binds_to`); clicking a panel entry walks the
 chain to that project, and each entry **expands to the class level** — the specific step / page-object
-classes behind that dependency, with counts (e.g. `CommonSteps · 320 binds_to`). A manual light/dark toggle (persisted) and a collapsible header (full-viewport
-graph) round it out. Self-contained (inline SVG + vanilla JS, no libraries). Only projects and their
-cross-project edges are read, so it is instant.
+classes behind that dependency, with counts (e.g. `CommonSteps · 320 binds_to`). The pinned panel also
+lists the project's **API endpoints** — the routes/operations its methods call (`calls_endpoint`),
+with a colour-coded verb badge and an `op` tag on operation-level ones. A manual light/dark toggle
+(persisted) and a collapsible header (full-viewport graph) round it out. Self-contained (inline SVG +
+vanilla JS, no libraries). Only projects and their cross-project edges (+ endpoints) are read, so it is instant.
 
 The `report` command is the **v1.x HTML visualization** on the roadmap (§13). It reads a map
 file and emits one self-contained HTML document — inline CSS/JS only, no external stylesheet,
@@ -257,9 +280,11 @@ script, font, or network request, so it opens offline straight from disk. Sectio
 counts, step-binding **coverage** (bound / ambiguous / unbound), class-kind breakdown,
 per-project table, a feature → scenario → step drill-down where each step is tagged with its
 resolved step definition (or the honest "no matching step definition" for `unbound`), and a
-diagnostics table, and a **collaborators** panel (page objects / API clients ranked by how many
+diagnostics table, a **collaborators** panel (page objects / API clients ranked by how many
 distinct methods drive them via `uses_type`, with the base class from `inherits` and an **unused**
-flag on orphans nothing drives). All map-derived text is HTML-escaped. Deterministic: the only volatile value
+flag on orphans nothing drives), and an **API endpoints** panel (routes + operations the suite calls,
+each with a colour-coded verb badge, a route/operation kind chip, its call-site count, and its
+reverse **blast radius** — how many scenarios reach it, via `EndpointReachAll`). All map-derived text is HTML-escaped. Deterministic: the only volatile value
 (the generated timestamp) is read from the map, not the clock. When the map's `user_version`
 predates the current schema, the report shows a **stale-schema banner** (and `report`/`search`
 print a matching console note) explaining that facets like Gherkin features / coverage / search are

@@ -100,4 +100,45 @@ public sealed class ImpactAnalyzerTests
         Assert.False(r.Found);
         Assert.Empty(r.Scenarios);
     }
+
+    [Fact]
+    public void EndpointReachAll_computes_call_sites_and_scenarios_directly_and_through_a_client()
+    {
+        // Endpoint 10 (a URL route) is called straight from the step method SignIn; endpoint 11 (an
+        // operation) is called inside LoginPage.Open, and SignIn uses LoginPage — so both reach the
+        // sign-in scenario, one directly and one transitively through the page object.
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Classes = Doc().Classes,
+            Methods = new[]
+            {
+                new MethodRow(1, 1, 1, "SignIn", "SignIn()", "public", Kinds.StepDefinitionMethod, "Steps.cs", 3, 4),
+                new MethodRow(5, 2, 1, "Open", "Open()", "public", Kinds.PageObjectMethod, "LoginPage.cs", 3, 4),
+            },
+            StepDefinitions = new[] { new StepDefinitionRow(1, 1, 1, 1, "When", "user signs in", ExpressionKinds.Regex, "", "Steps.cs", 3) },
+            Scenarios = new[] { new ScenarioRow(1, 1, 1, "Sign in scenario", "scenario", null, 0, "Login.feature", 3) },
+            ScenarioSteps = new[] { new ScenarioStepRow(1, 1, 1, "When", "user signs in", 0, false, false, "Login.feature", 4) },
+            Endpoints = new[]
+            {
+                new EndpointRow(10, "POST", "/api/orders"),
+                new EndpointRow(11, "GET", "GetSupplierRequest"),
+            },
+            Edges = new[]
+            {
+                new EdgeRow(RefKinds.ScenarioStep, 1, RefKinds.StepDefinition, 1, EdgeKinds.BindsTo, BindConfidence.Exact),
+                new EdgeRow(RefKinds.Method, 1, RefKinds.Class, 2, EdgeKinds.UsesType, BindConfidence.Exact), // SignIn → LoginPage
+                new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 10, EdgeKinds.CallsEndpoint, ""),           // direct call site
+                new EdgeRow(RefKinds.Method, 5, RefKinds.Endpoint, 11, EdgeKinds.CallsEndpoint, ""),           // inside LoginPage
+            },
+        };
+
+        var reach = ImpactAnalyzer.EndpointReachAll(doc);
+
+        Assert.Equal(1, reach[10].CallSiteCount);
+        Assert.Equal(new[] { 1 }, reach[10].ScenarioIds); // direct
+
+        Assert.Equal(1, reach[11].CallSiteCount);
+        Assert.Equal(new[] { 1 }, reach[11].ScenarioIds); // transitive through the page object
+    }
 }

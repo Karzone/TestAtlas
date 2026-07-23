@@ -29,7 +29,8 @@ public sealed record ClassFacts(
     int UiReferencingMembers,      // instance members referencing a UI-automation type
     int ApiReferencingMembers,     // methods referencing a RestSharp/HttpClient type
     bool ReferencesUiType,
-    bool ReferencesApiType);
+    bool ReferencesApiType,
+    IReadOnlyList<string>? ConstructedTypeNames = null); // simple names of `new X()` in the class body
 
 /// <summary>Per-method signals for method-kind classification.</summary>
 public sealed record MethodFacts(
@@ -46,11 +47,11 @@ public sealed record MethodFacts(
 public static class Classifier
 {
     /// <summary>
-    /// Classify a type from its gathered facts. <paramref name="baseKind"/> resolves a base-type
-    /// simple name to an already-assigned kind (for the inherits-a-page-object / -api-client rules);
-    /// pass <c>_ => null</c> on the first pass and re-run to a fixpoint.
+    /// Classify a type from its gathered facts. <paramref name="kindOf"/> resolves a type simple name
+    /// to an already-assigned kind (for the inherits-a-page-object / -api-client and wraps-an-api-client
+    /// rules); pass <c>_ => null</c> on the first pass and re-run to a fixpoint.
     /// </summary>
-    public static string ClassifyClass(ClassFacts f, ClassifierOptions opts, Func<string?, string?> baseKind)
+    public static string ClassifyClass(ClassFacts f, ClassifierOptions opts, Func<string?, string?> kindOf)
     {
         try
         {
@@ -65,15 +66,20 @@ public static class Classifier
                 return Kinds.PageObject;
             if (NameHasSuffix(f.Name, opts.PageObjectSuffixes) && f.ReferencesUiType)
                 return Kinds.PageObject;
-            if (baseKind(f.BaseTypeName) == Kinds.PageObject)
+            if (kindOf(f.BaseTypeName) == Kinds.PageObject)
                 return Kinds.PageObject;
 
-            // 3. API client.
+            // 3. API client — references RestSharp/HttpClient directly, matches a name suffix while
+            //    touching an API type, inherits an api_client, OR constructs/wraps one. The last rule
+            //    walks the service layer that hides HTTP behind a typed request (BaseRequest →
+            //    BaseApiService → *ApiService); it needs the inherits/uses fixpoint to converge.
             if (f.MethodCount > 0 && f.ApiReferencingMembers * 2 >= f.MethodCount)
                 return Kinds.ApiClient;
             if (NameHasSuffix(f.Name, opts.ApiClientSuffixes) && f.ReferencesApiType)
                 return Kinds.ApiClient;
-            if (baseKind(f.BaseTypeName) == Kinds.ApiClient)
+            if (kindOf(f.BaseTypeName) == Kinds.ApiClient)
+                return Kinds.ApiClient;
+            if (f.ConstructedTypeNames is { } constructed && constructed.Any(n => kindOf(n) == Kinds.ApiClient))
                 return Kinds.ApiClient;
 
             // 4. Test class.

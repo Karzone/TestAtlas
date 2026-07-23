@@ -105,10 +105,13 @@ page object is flaky.
 dotnet run --project src/CodeMap.Cli -- impact reqdemo.db --endpoint "/api/orders"
 ```
 
-Slice 4 extracts the **HTTP endpoints** test code calls (verb + route template — HttpClient,
-RestSharp, Refit, or any custom wrapper via the generic verb-name fallback) and ties them to
-scenarios through `calls_endpoint` edges. `impact --endpoint <route>` answers "which scenarios break
-if this API changes?" — the API-test symmetric of the page-object case.
+Slice 4 extracts the **API endpoints** test code calls and ties them to scenarios through
+`calls_endpoint` edges. Two shapes are captured: **URL routes** (verb + route template — HttpClient,
+RestSharp, Refit, or any custom wrapper via the generic verb-name fallback) and, for frameworks that
+hide the URL inside a typed request object, **operation-level** endpoints (`new BaseRequest<GetUserRequest>()`
+→ the request type is the operation identity, keyed by name with an inferred verb). `impact --endpoint
+<route-or-request>` answers "which scenarios break if this API changes?" — the API-test symmetric of
+the page-object case. The `report` and `map` views surface these endpoints and their blast radius too.
 
 > The same commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.

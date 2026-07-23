@@ -12,7 +12,12 @@ namespace Fixture.Reqnroll
         private readonly HttpClient _http = new HttpClient();
 
         [Given("a cart with {int} item(s)")]
-        public void GivenACartWith(int count) { }
+        public void GivenACartWith(int count)
+        {
+            // Operation-level endpoint (slice 4): the URL lives inside the typed request, not here —
+            // the request type IS the operation. BaseRequest<T> is the HTTP-executing wrapper.
+            _ = new BaseRequest<GetSupplierRequest>().Execute();
+        }
 
         [When("the customer checks out")]
         public void WhenTheCustomerChecksOut()

@@ -22,8 +22,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     public void Yields_exact_project_class_method_counts()
     {
         Assert.Equal(2, _fx.Doc.Projects.Count);
-        Assert.Equal(17, _fx.Doc.Classes.Count);
-        Assert.Equal(13, _fx.Doc.Methods.Count);
+        Assert.Equal(19, _fx.Doc.Classes.Count);
+        Assert.Equal(14, _fx.Doc.Methods.Count);
         Assert.Empty(_fx.Doc.Diagnostics);
     }
 
@@ -42,8 +42,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
 
         Assert.Equal(10, ClassesIn(specflow).Count);
         Assert.Equal(8, MethodsIn(specflow).Count);
-        Assert.Equal(7, ClassesIn(reqnroll).Count);
-        Assert.Equal(5, MethodsIn(reqnroll).Count);
+        Assert.Equal(9, ClassesIn(reqnroll).Count);   // +BaseRequest<T>, +GetSupplierRequest
+        Assert.Equal(6, MethodsIn(reqnroll).Count);   // +BaseRequest.Execute
     }
 
     [Fact]
@@ -217,20 +217,42 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
-    public void Endpoints_are_extracted_from_both_a_known_client_and_a_custom_wrapper()
+    public void Endpoints_are_extracted_from_a_known_client_a_custom_wrapper_and_an_operation()
     {
-        // WhenTheCustomerChecksOut posts via HttpClient (known-client tier); ThenTheOrderIsPlaced
-        // calls the custom ApiExecutor wrapper with an interpolated route (generic tier → template).
-        Assert.Equal(2, _fx.Doc.Endpoints.Count);
-        var post = _fx.Doc.Endpoints.Single(e => e.Verb == "POST");
-        Assert.Equal("/api/orders", post.Route);
-        var get = _fx.Doc.Endpoints.Single(e => e.Verb == "GET");
-        Assert.Equal("/api/orders/{reference}", get.Route);
+        // WhenTheCustomerChecksOut posts via HttpClient (known-client tier, route "/api/orders");
+        // ThenTheOrderIsPlaced calls the custom ApiExecutor wrapper with an interpolated route
+        // (generic tier → template); GivenACartWith constructs new BaseRequest<GetSupplierRequest>()
+        // (operation-level — the request type is the identity, no URL at the call site).
+        Assert.Equal(3, _fx.Doc.Endpoints.Count);
 
-        // Call-site edges tie the endpoints back to the exact step methods.
+        var post = _fx.Doc.Endpoints.Single(e => e.Route == "/api/orders");
+        Assert.Equal("POST", post.Verb);
+        var get = _fx.Doc.Endpoints.Single(e => e.Route == "/api/orders/{reference}");
+        Assert.Equal("GET", get.Verb);
+
+        // Call-site edges tie the URL endpoints back to the exact step methods.
         var checkout = _fx.Doc.Methods.Single(m => m.Name == "WhenTheCustomerChecksOut");
         Assert.Contains(_fx.Doc.Edges, e =>
             e.EdgeKind == EdgeKinds.CallsEndpoint && e.FromId == checkout.Id && e.ToId == post.Id);
+    }
+
+    [Fact]
+    public void Operation_level_endpoint_is_keyed_on_the_request_type_with_an_inferred_verb()
+    {
+        // The URL is hidden inside GetSupplierRequest; the operation is keyed on the type name (never
+        // a '/'-path) and the verb is inferred from the leading verb word ("Get…" → GET).
+        var op = _fx.Doc.Endpoints.Single(e => e.Route == "GetSupplierRequest");
+        Assert.Equal("GET", op.Verb);
+        Assert.DoesNotContain('/', op.Route); // structurally distinguishes operations from URL routes
+
+        // It is tied to its call site — the step that constructed the typed request.
+        var given = _fx.Doc.Methods.Single(m => m.Name == "GivenACartWith");
+        Assert.Contains(_fx.Doc.Edges, e =>
+            e.EdgeKind == EdgeKinds.CallsEndpoint && e.FromId == given.Id && e.ToId == op.Id);
+
+        // The wrapper that executes the call is recognised as an api_client (the classification that
+        // makes the operation extractable at all).
+        Assert.Equal(Kinds.ApiClient, _fx.Doc.Classes.Single(c => c.Name == "BaseRequest").Kind);
     }
 
     [Fact]
@@ -269,7 +291,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
         // Exactly one of each. Vacuity: the many shim classes deriving from System.Attribute — an
         // external base outside the solution — must produce NO inherits edge.
         Assert.Equal(1, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.Inherits));
-        Assert.Equal(1, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.UsesType));
+        // WhenTheySignIn → LoginPage (page object), and GivenACartWith → BaseRequest (api_client wrapper).
+        Assert.Equal(2, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.UsesType));
     }
 
     [Fact]

@@ -60,9 +60,22 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
     {
         var (code, stdout) = Capture(() => Commands.RunStats(new[] { _fx.DbPath }));
         Assert.Equal(ExitCode.Success, code);
-        Assert.Contains("2 project(s), 17 class(es), 13 method(s)", stdout);
+        Assert.Contains("2 project(s), 19 class(es), 14 method(s)", stdout);
         Assert.Contains("Fixture.SpecFlow", stdout);
-        Assert.Contains("structural edges: 1 inherits, 1 uses_type", stdout);
+        Assert.Contains("structural edges: 1 inherits, 2 uses_type", stdout);
+        Assert.Contains("endpoints: 3 (2 route(s), 1 operation(s); 3 call site(s))", stdout);
+    }
+
+    [Fact]
+    public void Impact_of_an_operation_endpoint_lists_the_affected_scenario()
+    {
+        // GetSupplierRequest is an operation-level endpoint (no URL). GivenACartWith constructs it and
+        // is bound by the Checkout scenarios — so an --endpoint query on the request name finds them.
+        var (code, stdout) = Capture(() => Commands.RunImpact(new[] { _fx.DbPath, "--endpoint", "GetSupplierRequest" }));
+        Assert.Equal(ExitCode.Success, code);
+        Assert.Contains("endpoint matching \"GetSupplierRequest\"", stdout);
+        Assert.Contains("GET GetSupplierRequest", stdout);
+        Assert.Contains("Place an order", stdout); // the scenario that binds GivenACartWith
     }
 
     [Fact]

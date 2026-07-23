@@ -89,6 +89,18 @@ internal static class SyntaxScan
         var referencesUi = ReferencesAny(type, UiTypes);
         var referencesApi = ReferencesAny(type, ApiTypes);
 
+        // Simple names of every `new X()` / `new X<..>()` in the type — the signal that lets the
+        // classifier propagate api_client-ness through a wrapper (a class that constructs an
+        // HTTP-executing type is itself part of the API layer). `List`/`Dictionary`/etc. fall out
+        // naturally: they are not solution classes, so they never resolve to a kind.
+        var constructed = type.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()
+            .Select(oc => SimpleBaseName(oc.Type))
+            .Where(n => !string.IsNullOrEmpty(n))
+            .Select(n => n!)
+            .Distinct(StringComparer.Ordinal)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToList();
+
         return new ClassFacts(
             Name: type.Identifier.ValueText,
             BaseTypeName: SimpleBaseName(type.BaseList?.Types.FirstOrDefault()?.Type),
@@ -102,7 +114,8 @@ internal static class SyntaxScan
             UiReferencingMembers: uiMembers,
             ApiReferencingMembers: apiMethodRefs,
             ReferencesUiType: referencesUi,
-            ReferencesApiType: referencesApi);
+            ReferencesApiType: referencesApi,
+            ConstructedTypeNames: constructed);
     }
 
     /// <summary>The step framework's default expression kind, inferred from the file's usings.</summary>
@@ -324,6 +337,56 @@ internal static class SyntaxScan
         }
 
         return found;
+    }
+
+    /// <summary>
+    /// Operation-level endpoint candidates in a method body: <c>new Wrapper&lt;Request&gt;(…)</c>
+    /// single-type-argument generic constructions, returned as (Wrapper, Request) simple-name pairs.
+    /// Purely syntactic — whether the wrapper is genuinely an HTTP-executing type is decided
+    /// solution-wide by the indexer (only it knows class kinds), which keeps only the pairs whose
+    /// wrapper is a classified <c>api_client</c>. This is the shape frameworks use when the URL lives
+    /// inside a typed request object rather than at the call site
+    /// (<c>new BaseRequest&lt;GetUserRequest&gt;().ExecuteAsync()</c>): the request type IS the
+    /// operation identity, so it becomes the endpoint's route (a bare type name, never containing '/').
+    /// </summary>
+    public static List<(string Wrapper, string Request)> GenericOperationCandidates(MethodDeclarationSyntax method)
+    {
+        var found = new List<(string, string)>();
+        SyntaxNode? body = method.Body;
+        body ??= method.ExpressionBody;
+        if (body is null) return found;
+
+        foreach (var oc in body.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
+            if (oc.Type is GenericNameSyntax { TypeArgumentList.Arguments: { Count: 1 } targs } g
+                && targs[0] is IdentifierNameSyntax req)
+                found.Add((g.Identifier.ValueText, req.Identifier.ValueText));
+
+        return found;
+    }
+
+    /// <summary>Ordered verb-word prefixes for inferring an operation's HTTP verb from its request-type name.</summary>
+    private static readonly (string Prefix, string Verb)[] OperationVerbPrefixes =
+    {
+        ("Get", "GET"), ("Fetch", "GET"), ("List", "GET"), ("Query", "GET"), ("Read", "GET"), ("Search", "GET"),
+        ("Create", "POST"), ("Add", "POST"), ("Insert", "POST"), ("Register", "POST"), ("Submit", "POST"),
+        ("Post", "POST"), ("Save", "POST"), ("Send", "POST"),
+        ("Update", "PUT"), ("Edit", "PUT"), ("Modify", "PUT"), ("Replace", "PUT"), ("Put", "PUT"),
+        ("Patch", "PATCH"),
+        ("Delete", "DELETE"), ("Remove", "DELETE"),
+    };
+
+    /// <summary>
+    /// Best-effort HTTP verb for an operation named after its request type — inferred from the leading
+    /// verb word (<c>GetUserRequest</c> → GET, <c>CreateOrderRequest</c> → POST). Returns <c>ANY</c>
+    /// when the name starts with no recognised verb, so the map never claims a verb it cannot see.
+    /// </summary>
+    public static string VerbFromOperationName(string requestType)
+    {
+        foreach (var (prefix, verb) in OperationVerbPrefixes)
+            if (requestType.StartsWith(prefix, StringComparison.Ordinal)
+                && (requestType.Length == prefix.Length || char.IsUpper(requestType[prefix.Length])))
+                return verb;
+        return "ANY";
     }
 
     /// <summary><c>HttpMethod.X</c> / <c>Method.X</c> member access → the verb, else null.</summary>

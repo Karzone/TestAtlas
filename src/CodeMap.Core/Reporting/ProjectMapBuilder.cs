@@ -76,6 +76,18 @@ public static class ProjectMapBuilder
             }
         }
 
+        // ---- per-project API surface: the endpoints each project's methods call (slice 4) ----
+        var endpointById = doc.Endpoints.ToDictionary(e => e.Id);
+        var projectEndpoints = new Dictionary<int, HashSet<(string Verb, string Route)>>();
+        foreach (var e in doc.Edges)
+        {
+            if (e.EdgeKind != EdgeKinds.CallsEndpoint || e.ToId is not int epId) continue;
+            if (!methodProj.TryGetValue(e.FromId, out var pid)) continue;
+            if (!endpointById.TryGetValue(epId, out var ep)) continue;
+            if (!projectEndpoints.TryGetValue(pid, out var set)) projectEndpoints[pid] = set = new();
+            set.Add((ep.Verb, ep.Route));
+        }
+
         var inDeg = new Dictionary<int, int>();
         var outDeg = new Dictionary<int, int>();
         foreach (var ((a, b), _) in agg)
@@ -202,15 +214,18 @@ public static class ProjectMapBuilder
 
         // Data blob: node labels/kinds + directed weighted links, for the panel.
         sb.Append("<script>window.__MAP__=");
-        AppendJson(sb, ordered, nodes, links);
+        AppendJson(sb, ordered, nodes, links, projectEndpoints);
         sb.Append(";</script>");
 
         sb.Append("<script>").Append(Js).Append("</script></body></html>");
         return sb.ToString();
     }
 
+    private const int MaxEndpointRows = 60;
+
     private static void AppendJson(StringBuilder sb, List<ProjectRow> ordered,
-        IReadOnlyDictionary<int, Node> nodes, List<Link> links)
+        IReadOnlyDictionary<int, Node> nodes, List<Link> links,
+        IReadOnlyDictionary<int, HashSet<(string Verb, string Route)>> projectEndpoints)
     {
         sb.Append("{\"n\":{");
         var first = true;
@@ -221,7 +236,22 @@ public static class ProjectMapBuilder
             var nd = nodes[p.Id];
             sb.Append('"').Append(p.Id).Append("\":{\"name\":").Append(J(p.Name))
               .Append(",\"kind\":").Append(J(p.Kind))
-              .Append(",\"in\":").Append(nd.InDegree).Append(",\"out\":").Append(nd.OutDegree).Append('}');
+              .Append(",\"in\":").Append(nd.InDegree).Append(",\"out\":").Append(nd.OutDegree);
+
+            if (projectEndpoints.TryGetValue(p.Id, out var eps) && eps.Count > 0)
+            {
+                var ordered2 = eps
+                    .OrderBy(e => e.Route, StringComparer.Ordinal).ThenBy(e => e.Verb, StringComparer.Ordinal)
+                    .Take(MaxEndpointRows).ToList();
+                sb.Append(",\"eps\":[");
+                for (var k = 0; k < ordered2.Count; k++)
+                {
+                    if (k > 0) sb.Append(',');
+                    sb.Append("{\"v\":").Append(J(ordered2[k].Verb)).Append(",\"r\":").Append(J(ordered2[k].Route)).Append('}');
+                }
+                sb.Append(']');
+            }
+            sb.Append('}');
         }
         sb.Append("},\"links\":[");
         for (var i = 0; i < links.Count; i++)
@@ -375,6 +405,15 @@ public static class ProjectMapBuilder
         .pi-cname{color:var(--ink);word-break:break-word}
         .pi-cmeta{color:var(--faint);font-family:var(--mono);font-size:11px;white-space:nowrap}
         .p-empty{color:var(--faint);font-size:12.5px;padding:2px 8px}
+        .p-ep{display:flex;align-items:center;gap:8px;padding:4px 8px;border-top:1px solid var(--line)}
+        .ep-v{font-family:var(--mono);font-size:9.5px;font-weight:700;letter-spacing:.3px;border:1px solid;border-radius:5px;
+        padding:1px 5px;min-width:42px;text-align:center;flex:none}
+        .ep-get{color:var(--shared);border-color:var(--shared)}.ep-post{color:var(--bdd);border-color:var(--bdd)}
+        .ep-put{color:var(--unit);border-color:var(--unit)}.ep-patch{color:var(--unit);border-color:var(--unit)}
+        .ep-delete{color:#e03131;border-color:#e03131}.ep-any{color:var(--faint);border-color:var(--line)}
+        .ep-r{color:var(--ink);font-family:var(--mono);font-size:11.5px;word-break:break-word}
+        .ep-op{margin-left:auto;color:var(--bdd);font-size:10px;font-family:var(--mono);border:1px solid var(--bdd);
+        border-radius:20px;padding:0 6px;flex:none}
         """;
 
     // Runs in <head> before paint so a saved manual theme choice applies without a flash.
@@ -406,6 +445,7 @@ public static class ProjectMapBuilder
             nodes.forEach(function(m){m.classList.remove('active');});
           }
           function esc(s){var d=document.createElement('div'); d.textContent=(s==null?'':s); return d.innerHTML;}
+          function vcls(v){v=(v||'').toUpperCase();return v==='GET'||v==='POST'||v==='PUT'||v==='PATCH'||v==='DELETE'?v.toLowerCase():'any';}
           function list(arr,key){
             if(!arr.length) return '<div class="p-empty">none</div>';
             return arr.map(function(l){
@@ -432,6 +472,15 @@ public static class ProjectMapBuilder
               +' · depended on by '+m.in+' · depends on '+m.out+'</div>';
             h+='<div class="p-sec">Depends on ('+out.length+')</div>'+list(out,'b');
             h+='<div class="p-sec">Depended on by ('+inc.length+')</div>'+list(inc,'a');
+            var eps=m.eps||[];
+            if(eps.length){
+              h+='<div class="p-sec">API endpoints ('+eps.length+')</div>';
+              h+=eps.map(function(e){
+                var op=e.r.indexOf('/')<0;
+                return '<div class="p-ep"><span class="ep-v ep-'+vcls(e.v)+'">'+esc(e.v)+'</span>'
+                  +'<span class="ep-r">'+esc(e.r)+'</span>'+(op?'<span class="ep-op">op</span>':'')+'</div>';
+              }).join('');
+            }
             document.getElementById('panel-body').innerHTML=h;
             document.getElementById('panel').hidden=false;
           }

@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using TestAtlas.Core.Analysis;
 using TestAtlas.Core.Model;
 using TestAtlas.Core.Storage;
 
@@ -87,6 +88,7 @@ public static class HtmlReportBuilder
         Card(sb, doc.Features.Count, "features");
         Card(sb, doc.Scenarios.Count, "scenarios");
         Card(sb, totalSteps, "scenario steps");
+        if (doc.Endpoints.Count > 0) Card(sb, doc.Endpoints.Count, "API endpoints");
         sb.Append("</section>");
 
         // ---- binding coverage ---------------------------------------------------------------
@@ -146,6 +148,9 @@ public static class HtmlReportBuilder
 
         // ---- collaborators (page objects / API clients + who drives them) -------------------
         AppendCollaborators(sb, doc);
+
+        // ---- API endpoints / operations the suite exercises + their blast radius -------------
+        AppendEndpoints(sb, doc);
 
         // ---- feature / scenario / step drill-down -------------------------------------------
         if (doc.Features.Count > 0)
@@ -349,6 +354,75 @@ public static class HtmlReportBuilder
         sb.Append("</details>");
     }
 
+    // ---- endpoints panel ---------------------------------------------------------------------
+    private const int MaxEndpointRows = 80;
+
+    /// <summary>True for an operation-level endpoint — a bare request-type identity, no URL path.</summary>
+    private static bool IsOperation(string route) => !route.Contains('/');
+
+    /// <summary>
+    /// The HTTP endpoints / API operations the suite calls (spec §5.1, slice 4), each with its
+    /// reverse blast radius — how many test scenarios reach it — so a breaking API change is a glance,
+    /// not a query. Two shapes share the table: URL <b>routes</b> (verb + path, e.g. <c>POST
+    /// /api/orders</c>) and <b>operations</b> (a typed request the framework maps to a URL internally,
+    /// e.g. <c>GetUserconfigurationRequest</c>); the verb of an operation is inferred from its name.
+    /// </summary>
+    private static void AppendEndpoints(StringBuilder sb, MapDocument doc)
+    {
+        if (doc.Endpoints.Count == 0) return;
+
+        var reach = ImpactAnalyzer.EndpointReachAll(doc);
+        var routes = doc.Endpoints.Count(e => !IsOperation(e.Route));
+        var operations = doc.Endpoints.Count - routes;
+
+        var ranked = doc.Endpoints
+            .Select(e => (Ep: e, Reach: reach.TryGetValue(e.Id, out var r) ? r : new ImpactAnalyzer.EndpointReach(0, Array.Empty<int>())))
+            .OrderByDescending(x => x.Reach.ScenarioIds.Count)
+            .ThenByDescending(x => x.Reach.CallSiteCount)
+            .ThenBy(x => x.Ep.Route, StringComparer.Ordinal)
+            .ThenBy(x => x.Ep.Verb, StringComparer.Ordinal)
+            .ToList();
+
+        sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>API endpoints</h2>");
+        sb.Append("<span class=\"subtle\">");
+        if (routes > 0) sb.Append(routes).Append(" route").Append(routes == 1 ? "" : "s");
+        if (routes > 0 && operations > 0) sb.Append(" · ");
+        if (operations > 0) sb.Append(operations).Append(" operation").Append(operations == 1 ? "" : "s");
+        sb.Append("</span></summary>");
+
+        sb.Append("<div class=\"table-scroll\"><table class=\"grid ep\"><thead><tr>");
+        foreach (var h in new[] { "verb", "endpoint", "kind", "call sites", "scenarios" })
+            sb.Append("<th>").Append(h).Append("</th>");
+        sb.Append("</tr></thead><tbody>");
+
+        foreach (var (ep, r) in ranked.Take(MaxEndpointRows))
+        {
+            var op = IsOperation(ep.Route);
+            sb.Append("<tr><td><span class=\"verb ").Append(VerbClass(ep.Verb)).Append("\">")
+              .Append(E(ep.Verb)).Append("</span></td>");
+            sb.Append("<td class=\"mono ep-route\">").Append(E(ep.Route)).Append("</td>");
+            sb.Append("<td><span class=\"chip").Append(op ? " op" : "").Append("\">")
+              .Append(op ? "operation" : "route").Append("</span></td>");
+            sb.Append("<td class=\"num\">").Append(r.CallSiteCount).Append("</td>");
+            if (r.ScenarioIds.Count == 0)
+                sb.Append("<td><span class=\"tag-unused\">none bound</span></td>");
+            else
+                sb.Append("<td class=\"num\">").Append(r.ScenarioIds.Count)
+                  .Append(" scenario").Append(r.ScenarioIds.Count == 1 ? "" : "s").Append("</td>");
+            sb.Append("</tr>");
+        }
+        sb.Append("</tbody></table></div>");
+        if (ranked.Count > MaxEndpointRows)
+            sb.Append("<p class=\"subtle more\">… and ").Append(ranked.Count - MaxEndpointRows)
+              .Append(" more (query the map db for the full list).</p>");
+        sb.Append("</details>");
+    }
+
+    private static string VerbClass(string verb) => verb switch
+    {
+        "GET" => "get", "POST" => "post", "PUT" => "put", "PATCH" => "patch", "DELETE" => "delete", _ => "any",
+    };
+
     // ---- small emit helpers ------------------------------------------------------------------
     private static void Card(StringBuilder sb, int value, string label)
         => sb.Append("<div class=\"card\"><div class=\"c-num\">").Append(value)
@@ -449,6 +523,19 @@ public static class HtmlReportBuilder
         .chip{display:inline-block;font-size:11.5px;font-family:var(--mono);color:var(--dim);background:var(--bg);
         border:1px solid var(--line);border-radius:20px;padding:1px 9px}
         .chip.outline{color:var(--amber);border-color:var(--amber)}
+        .chip.op{color:var(--accent);border-color:var(--accent)}
+        .grid.ep th:nth-child(1),.grid.ep td:nth-child(1){width:64px}
+        .grid.ep th:nth-child(3),.grid.ep td:nth-child(3){width:96px}
+        .grid.ep td.num{width:110px}
+        .ep-route{overflow-wrap:anywhere;word-break:break-word;color:var(--ink)}
+        .verb{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.4px;
+        border-radius:5px;padding:2px 6px;border:1px solid;min-width:44px;text-align:center}
+        .verb.get{color:var(--bound);border-color:var(--bound);background:color-mix(in srgb,var(--bound) 10%,transparent)}
+        .verb.post{color:var(--accent);border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+        .verb.put{color:var(--amber);border-color:var(--amber);background:color-mix(in srgb,var(--amber) 10%,transparent)}
+        .verb.patch{color:var(--amber);border-color:var(--amber);background:color-mix(in srgb,var(--amber) 8%,transparent)}
+        .verb.delete{color:var(--unbound);border-color:var(--unbound);background:color-mix(in srgb,var(--unbound) 10%,transparent)}
+        .verb.any{color:var(--faint);border-color:var(--line)}
         .subtle{color:var(--faint);font-size:12.5px}
         .warn-text{color:var(--amber);font-weight:600}
         .more{margin:10px 0 0}

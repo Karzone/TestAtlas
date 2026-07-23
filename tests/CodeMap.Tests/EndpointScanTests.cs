@@ -116,4 +116,58 @@ public sealed class EndpointScanTests
         Assert.Contains(("GET", "/api/a"), calls);
         Assert.Contains(("POST", "/api/b"), calls);
     }
+
+    // ---- operation-level candidates: new Wrapper<Request>() (slice 4, operation-level) --------------
+
+    private static List<(string Wrapper, string Request)> Operations(string methodBody)
+    {
+        var src = $$"""
+            class C
+            {
+                void M() { {{methodBody}} }
+            }
+            """;
+        var method = CSharpSyntaxTree.ParseText(src).GetRoot()
+            .DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+        return SyntaxScan.GenericOperationCandidates(method);
+    }
+
+    [Fact]
+    public void Generic_construction_yields_the_wrapper_and_request_type()
+    {
+        // The exact shape the URL-hiding frameworks use: the request type is the operation identity.
+        var ops = Operations("""_ = new BaseRequest<GetUserconfigurationRequest>().ExecuteAsync();""");
+        Assert.Equal(("BaseRequest", "GetUserconfigurationRequest"), Assert.Single(ops));
+    }
+
+    [Fact]
+    public void Every_single_type_argument_construction_is_a_candidate_the_api_client_filter_comes_later()
+    {
+        // The parser is deliberately permissive — whether the wrapper is HTTP-executing is decided
+        // solution-wide by the indexer (only it knows class kinds). So `new List<Foo>()` is returned
+        // here and simply filtered out later when List is not a classified api_client.
+        var ops = Operations("""var x = new List<Foo>();""");
+        Assert.Equal(("List", "Foo"), Assert.Single(ops));
+    }
+
+    [Theory]
+    [InlineData("""var d = new Dictionary<string, int>();""")] // multi-arg generic → not a candidate
+    [InlineData("""var f = new Foo();""")]                      // non-generic → not a candidate
+    [InlineData("""var n = 5;""")]                              // no construction at all
+    public void Non_single_type_argument_constructions_are_ignored(string body)
+        => Assert.Empty(Operations(body));
+
+    [Theory]
+    [InlineData("GetUserRequest", "GET")]
+    [InlineData("FetchOrdersQuery", "GET")]
+    [InlineData("CreateOrderRequest", "POST")]
+    [InlineData("SubmitPaymentCommand", "POST")]
+    [InlineData("UpdateSupplierRequest", "PUT")]
+    [InlineData("DeleteAccountRequest", "DELETE")]
+    [InlineData("RemoveItemRequest", "DELETE")]
+    [InlineData("PatchProfileRequest", "PATCH")]
+    [InlineData("UserconfigurationRequest", "ANY")]   // no leading verb word → ANY, never a guess
+    [InlineData("Getaway", "ANY")]                     // "Get" not followed by an uppercase boundary
+    public void Operation_verb_is_inferred_from_the_request_name(string request, string verb)
+        => Assert.Equal(verb, SyntaxScan.VerbFromOperationName(request));
 }

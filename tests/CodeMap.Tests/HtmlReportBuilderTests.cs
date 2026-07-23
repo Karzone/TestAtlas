@@ -197,6 +197,60 @@ public sealed class HtmlReportBuilderTests
         Assert.Contains(longPath, html); // message rendered in full (it wraps via CSS, not truncation)
     }
 
+    // A doc whose one step method calls both a URL route and an operation-level endpoint, with the
+    // step bound to a scenario — so the panel can show each endpoint's blast radius.
+    private static MapDocument DocWithEndpoints() => new()
+    {
+        UserVersion = MapSchema.Version,
+        Classes = new[] { new ClassRow(1, 1, "OrderSteps", "N", null, Kinds.StepClass, "S.cs", 1, 9) },
+        Methods = new[] { new MethodRow(1, 1, 1, "WhenOrdering", "WhenOrdering()", "public", Kinds.StepDefinitionMethod, "S.cs", 3, 5) },
+        StepDefinitions = new[] { new StepDefinitionRow(1, 1, 1, 1, "When", "ordering", ExpressionKinds.Regex, "", "S.cs", 3) },
+        Features = new[] { new FeatureRow(1, 1, "Orders", "d", "", "Orders.feature") },
+        Scenarios = new[] { new ScenarioRow(1, 1, 1, "Place order", "scenario", "", 0, "Orders.feature", 3) },
+        ScenarioSteps = new[] { new ScenarioStepRow(1, 1, 1, "When", "ordering", 0, false, false, "Orders.feature", 4) },
+        Endpoints = new[]
+        {
+            new EndpointRow(1, "POST", "/api/orders"),
+            new EndpointRow(2, "GET", "GetSupplierRequest"),
+        },
+        Edges = new[]
+        {
+            new EdgeRow(RefKinds.ScenarioStep, 1, RefKinds.StepDefinition, 1, EdgeKinds.BindsTo, BindConfidence.Exact),
+            new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 1, EdgeKinds.CallsEndpoint, ""),
+            new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 2, EdgeKinds.CallsEndpoint, ""),
+        },
+    };
+
+    [Fact]
+    public void Endpoints_panel_lists_routes_operations_and_their_blast_radius()
+    {
+        var html = HtmlReportBuilder.Build(DocWithEndpoints());
+
+        Assert.Contains("API endpoints", html);
+        Assert.Contains("1 route", html);
+        Assert.Contains("1 operation", html);
+
+        // Both shapes render with a verb badge and the endpoint identity.
+        Assert.Contains("/api/orders", html);
+        Assert.Contains("GetSupplierRequest", html);
+        Assert.Contains("verb post", html);
+        Assert.Contains("verb get", html);
+
+        // The URL is a "route"; the typed request is an "operation".
+        Assert.Contains(">route<", html);
+        Assert.Contains(">operation<", html);
+
+        // Blast radius: each endpoint reaches the one bound scenario (vacuity: not "0", not "none").
+        Assert.Contains("1 scenario", html);
+    }
+
+    [Fact]
+    public void No_endpoints_panel_when_the_map_has_none() // vacuity guard
+    {
+        var html = HtmlReportBuilder.Build(Doc()); // Doc() has no endpoints
+        Assert.DoesNotContain("API endpoints", html);
+    }
+
     [Fact]
     public void Handles_an_empty_map_without_throwing()
     {

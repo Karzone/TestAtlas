@@ -56,6 +56,23 @@ public sealed class ClassifierTests
     public void Step_class_wins_over_page_object_when_both_apply()
         => Assert.Equal(Kinds.StepClass, Classify(CF("UiSteps", binding: true, instMembers: 2, uiMembers: 2)));
 
+    [Fact]
+    public void Wraps_an_api_client_by_constructing_one()
+    {
+        // The service-layer propagation: a class that constructs an already-classified api_client
+        // (BaseApiService → `new BaseRequest<..>()`) is itself part of the API layer. It has no direct
+        // RestSharp/HttpClient reference and no api name-suffix, so ONLY the wraps-an-api-client rule
+        // can catch it — and only once the resolver knows BaseRequest's kind (i.e. after the fixpoint).
+        var facts = new ClassFacts("BaseApiService", BaseTypeName: null, HasBindingAttribute: false,
+            HasTestClassAttribute: false, MethodCount: 1, StepMethodCount: 0, TestMethodCount: 0,
+            HookMethodCount: 0, InstanceMemberCount: 0, UiReferencingMembers: 0, ApiReferencingMembers: 0,
+            ReferencesUiType: false, ReferencesApiType: false, ConstructedTypeNames: new[] { "BaseRequest" });
+
+        Assert.Equal(Kinds.Other, Classifier.ClassifyClass(facts, ClassifierOptions.Default, _ => null));
+        Assert.Equal(Kinds.ApiClient, Classifier.ClassifyClass(facts, ClassifierOptions.Default,
+            n => n == "BaseRequest" ? Kinds.ApiClient : null));
+    }
+
     [Theory]
     [InlineData(true, false, false, Kinds.PageObject, Kinds.StepDefinitionMethod)]
     [InlineData(false, true, false, Kinds.PageObject, Kinds.HookMethod)]

@@ -86,6 +86,65 @@ public static class ImpactAnalyzer
         return new ImpactResult(true, label, affectedStepDefs.Count, featureCount, scenarios);
     }
 
+    /// <summary>One endpoint's reverse reach: how many methods call it, and the scenarios it touches.</summary>
+    public sealed record EndpointReach(int CallSiteCount, IReadOnlyList<int> ScenarioIds);
+
+    /// <summary>
+    /// The reverse reach of every endpoint in a single pass: endpoint id → its call-site count and the
+    /// distinct scenario ids whose steps reach it (directly, or through a client/wrapper class — the
+    /// same walk as an <c>impact --endpoint</c> query). Computed once for all endpoints so the HTML
+    /// report can show a per-endpoint blast radius without running a query each.
+    /// </summary>
+    public static IReadOnlyDictionary<int, EndpointReach> EndpointReachAll(MapDocument doc)
+    {
+        var classOfMethod = doc.Methods.ToDictionary(m => m.Id, m => m.ClassId);
+        var stepDefsByMethod = doc.StepDefinitions.GroupBy(s => s.MethodId).ToDictionary(g => g.Key, g => g.Select(s => s.Id).ToList());
+        var usesEdges = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.UsesType && e.FromKind == RefKinds.Method && e.ToId is int)
+            .Select(e => (Method: e.FromId, Class: e.ToId!.Value)).ToList();
+        var inheritsEdges = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.Inherits && e.FromKind == RefKinds.Class && e.ToId is int)
+            .Select(e => (Derived: e.FromId, Base: e.ToId!.Value)).ToList();
+
+        var boundBy = new Dictionary<int, List<int>>();
+        foreach (var e in doc.Edges)
+            if (e.EdgeKind == EdgeKinds.BindsTo && e.FromKind == RefKinds.ScenarioStep && e.ToKind == RefKinds.StepDefinition && e.ToId is int sd)
+                (boundBy.TryGetValue(sd, out var l) ? l : (boundBy[sd] = new())).Add(e.FromId);
+
+        var scenarioOfStep = doc.ScenarioSteps.ToDictionary(s => s.Id, s => s.ScenarioId);
+
+        var callsByEndpoint = new Dictionary<int, HashSet<int>>();
+        foreach (var e in doc.Edges)
+            if (e.EdgeKind == EdgeKinds.CallsEndpoint && e.FromKind == RefKinds.Method && e.ToId is int ep)
+                (callsByEndpoint.TryGetValue(ep, out var m) ? m : (callsByEndpoint[ep] = new())).Add(e.FromId);
+
+        IReadOnlyList<int> Scenarios(HashSet<int> seedMethods)
+        {
+            var affected = new HashSet<int>();
+            foreach (var m in seedMethods)
+                if (stepDefsByMethod.TryGetValue(m, out var sd)) affected.UnionWith(sd);
+
+            var seedClasses = seedMethods.Select(m => classOfMethod.TryGetValue(m, out var c) ? c : -1).Where(c => c >= 0).ToHashSet();
+            var reach = ExpandReach(seedClasses, usesEdges, inheritsEdges, classOfMethod);
+            var reachedMethods = usesEdges.Where(e => reach.Contains(e.Class)).Select(e => e.Method).ToHashSet();
+            foreach (var s in doc.StepDefinitions)
+                if (reachedMethods.Contains(s.MethodId)) affected.Add(s.Id);
+
+            var scen = new HashSet<int>();
+            foreach (var sd in affected)
+                if (boundBy.TryGetValue(sd, out var steps))
+                    foreach (var st in steps)
+                        if (scenarioOfStep.TryGetValue(st, out var scId)) scen.Add(scId);
+            return scen.OrderBy(x => x).ToList();
+        }
+
+        var result = new Dictionary<int, EndpointReach>();
+        foreach (var ep in doc.Endpoints)
+        {
+            var callers = callsByEndpoint.TryGetValue(ep.Id, out var s) ? s : new HashSet<int>();
+            result[ep.Id] = new EndpointReach(callers.Count, Scenarios(callers));
+        }
+        return result;
+    }
+
     private static (HashSet<int> StepDefs, string Label) ResolveTargets(
         MapDocument doc, ImpactQuery query,
         IReadOnlyDictionary<int, ClassRow> classById,
