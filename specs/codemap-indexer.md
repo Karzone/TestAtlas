@@ -113,7 +113,12 @@ definition therefore binds a `Given` / `Then` / `And` step of the same text. (An
 on keyword and so reported ~86% of real `And` steps as falsely `unbound`; the `BindingKeyword` is now
 retained only as metadata.) A consequence: the same text under two different keyword attributes is a
 genuine duplicate and surfaces as `ambiguous`, matching SpecFlow's own "no duplicate step text" rule.
-Matching is still scoped **per project** (a test assembly resolves its own bindings).
+
+**Solution-wide scope.** A feature's steps bind against step definitions in **any** project, not just
+their own. Large suites keep step definitions in shared library projects referenced by the feature
+projects; scoping per-project reported the majority of real steps as falsely `unbound` (on a 28-project
+suite, ~29k of ~55k "unbound" steps had their exact text defined in another project). The trade-off is
+that a step text defined in more than one project surfaces as `ambiguous` — which is the honest signal.
 
 **Implementation status.** `binds_to` / `unbound` (slice 2b) and `inherits` / `uses_type` (slice 3)
 are built. All are resolved **syntactically** — by simple type name across the solution — to preserve

@@ -115,10 +115,10 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     [Fact]
     public void Gherkin_features_scenarios_and_steps_are_extracted()
     {
-        // 2 .feature files (Login + Checkout), 3 scenarios, 8 steps in source order.
+        // 2 .feature files (Login + Checkout), 4 scenarios, 9 steps in source order.
         Assert.Equal(2, _fx.Doc.Features.Count);
-        Assert.Equal(3, _fx.Doc.Scenarios.Count);
-        Assert.Equal(8, _fx.Doc.ScenarioSteps.Count);
+        Assert.Equal(4, _fx.Doc.Scenarios.Count);
+        Assert.Equal(9, _fx.Doc.ScenarioSteps.Count);
 
         var featureNames = _fx.Doc.Features.Select(f => f.Name).OrderBy(n => n).ToArray();
         Assert.Equal(new[] { "Checkout", "Login" }, featureNames);
@@ -183,9 +183,25 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
         var ambiguous = bindsTo.Count(e => e.Confidence == BindConfidence.Ambiguous);
         var unbound = _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.Unbound);
 
-        Assert.Equal(6, exact);      // the six cleanly-resolved steps
+        Assert.Equal(7, exact);      // six in-project + one cross-project ("the customer checks out")
         Assert.Equal(2, ambiguous);  // the two candidates for "the system is ready"
         Assert.Equal(1, unbound);    // "pigs can fly"
+    }
+
+    [Fact]
+    public void A_step_binds_to_a_definition_in_another_project() // solution-wide matching
+    {
+        // This step lives in a SpecFlow feature but is only defined in the Reqnroll project.
+        var step = _fx.Doc.ScenarioSteps.Single(s =>
+            s.Text == "the customer checks out" && s.FilePath.Replace('\\', '/').Contains("SpecFlow"));
+        var featureProject = step.ProjectId;
+
+        var edge = _fx.Doc.Edges.Single(e => e.FromKind == RefKinds.ScenarioStep && e.FromId == step.Id);
+        Assert.Equal(EdgeKinds.BindsTo, edge.EdgeKind);
+
+        var def = _fx.Doc.StepDefinitions.Single(d => d.Id == edge.ToId);
+        Assert.Equal("the customer checks out", def.Expression);
+        Assert.NotEqual(featureProject, def.ProjectId); // genuinely cross-project
     }
 
     [Fact]
@@ -247,11 +263,11 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
         var signIn = _fx.Doc.Scenarios.Single(s => s.Name == "Successful sign in");
         Assert.Equal(new[] { (long)signIn.Id }, hits.ToArray());
 
-        // The feature name is indexed too: 'login' matches both Login scenarios, neither Checkout one.
+        // The feature name is indexed too: 'login' matches all three Login scenarios, no Checkout one.
         var loginHits = MapReader.SearchScenarios(_fx.DbPath, "login")
             .Select(id => _fx.Doc.Scenarios.Single(s => s.Id == (int)id).Name)
             .OrderBy(n => n).ToArray();
-        Assert.Equal(new[] { "Readiness", "Successful sign in" }, loginHits);
+        Assert.Equal(new[] { "Cross project step", "Readiness", "Successful sign in" }, loginHits);
 
         Assert.Empty(MapReader.SearchScenarios(_fx.DbPath, "zzzznope"));
     }

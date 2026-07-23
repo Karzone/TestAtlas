@@ -142,7 +142,7 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
         var (code, stdout) = Capture(() => Commands.RunSearch(new[] { _fx.DbPath, "login", "--scenarios" }));
         Assert.Equal(ExitCode.Success, code);
         Assert.DoesNotContain("step definitions matching", stdout);
-        Assert.Contains("scenarios matching 'login': 2", stdout);
+        Assert.Contains("scenarios matching 'login': 3", stdout);
     }
 
     [Fact]

@@ -348,10 +348,13 @@ public sealed class SolutionIndexer
     }
 
     /// <summary>
-    /// Resolve each scenario step against its project's step definitions using the tested matcher,
-    /// producing binds_to (exact/ambiguous) and unbound edges (spec §5.2). Bindings are precompiled
-    /// once per project so this stays fast on large solutions; And/But keywords inherit the running
-    /// primary keyword within a scenario.
+    /// Resolve each scenario step against the solution's step definitions using the tested matcher,
+    /// producing binds_to (exact/ambiguous) and unbound edges (spec §5.2). Matching is
+    /// **solution-wide** — a feature's steps bind to definitions in ANY project, because large suites
+    /// keep step definitions in shared library projects referenced by the feature projects; scoping
+    /// per-project reported those (the majority) as falsely unbound. Bindings are precompiled once.
+    /// And/But keywords inherit the running primary keyword within a scenario (kept for the effective
+    /// keyword, though matching itself is keyword-agnostic — see StepMatcher).
     /// </summary>
     private static List<EdgeEntity> BuildBindingEdges(
         IReadOnlyList<StepDefinitionEntity> stepDefs, IReadOnlyList<ScenarioStepEntity> scenarioSteps)
@@ -359,15 +362,11 @@ public sealed class SolutionIndexer
         var edges = new List<EdgeEntity>();
         if (scenarioSteps.Count == 0) return edges;
 
-        var compiledByProject = stepDefs
-            .GroupBy(sd => sd.ProjectId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(sd => StepMatcher.Compile(new StepBinding(
-                        ToBindingKeyword(sd.Keyword), sd.Expression, ToExpressionKind(sd.ExpressionKind), sd.Id.ToString())))
-                    .Where(c => c is not null).Select(c => c!).ToList());
-
-        var empty = new List<CompiledBinding>();
+        // One solution-wide candidate set, in stepDef id order (deterministic).
+        var compiled = stepDefs
+            .Select(sd => StepMatcher.Compile(new StepBinding(
+                ToBindingKeyword(sd.Keyword), sd.Expression, ToExpressionKind(sd.ExpressionKind), sd.Id.ToString())))
+            .Where(c => c is not null).Select(c => c!).ToList();
 
         foreach (var scenarioGroup in scenarioSteps.GroupBy(s => s.ScenarioId))
         {
@@ -377,7 +376,6 @@ public sealed class SolutionIndexer
                 var keyword = StepKeywords.Resolve(step.Keyword, previousPrimary);
                 previousPrimary = keyword;
 
-                var compiled = compiledByProject.TryGetValue(step.ProjectId, out var list) ? list : empty;
                 var result = StepMatcher.Match(new ScenarioStepInput(keyword, step.Text), compiled);
 
                 if (result.Confidence == MatchConfidence.Unbound)
