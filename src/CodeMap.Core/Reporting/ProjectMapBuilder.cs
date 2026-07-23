@@ -109,7 +109,7 @@ public static class ProjectMapBuilder
         LegendSwatch(sb, "shared_library", "shared library");
         LegendSwatch(sb, "unit_tests", "unit tests");
         LegendSwatch(sb, "other", "other");
-        sb.Append("<span class=\"hint\">drag to pan · scroll to zoom · hover a project to isolate its links</span>");
+        sb.Append("<span class=\"hint\">click a project to pin its dependencies · drag to pan · scroll to zoom</span>");
         sb.Append("</div></div></header>");
 
         if (n == 0)
@@ -160,8 +160,66 @@ public static class ProjectMapBuilder
         }
         sb.Append("</g></svg>");
 
+        // Click-to-pin dependency panel (populated by JS from the data blob below).
+        sb.Append("<aside id=\"panel\" hidden><button class=\"ic pclose\" onclick=\"unpin()\" aria-label=\"Close\">×</button>")
+          .Append("<div id=\"panel-body\"></div></aside>");
+
+        // Data blob: node labels/kinds + directed weighted links, for the panel.
+        sb.Append("<script>window.__MAP__=");
+        AppendJson(sb, ordered, nodes, links);
+        sb.Append(";</script>");
+
         sb.Append("<script>").Append(Js).Append("</script></body></html>");
         return sb.ToString();
+    }
+
+    private static void AppendJson(StringBuilder sb, List<ProjectRow> ordered,
+        IReadOnlyDictionary<int, Node> nodes, List<Link> links)
+    {
+        sb.Append("{\"n\":{");
+        var first = true;
+        foreach (var p in ordered)
+        {
+            if (!first) sb.Append(',');
+            first = false;
+            var nd = nodes[p.Id];
+            sb.Append('"').Append(p.Id).Append("\":{\"name\":").Append(J(p.Name))
+              .Append(",\"kind\":").Append(J(p.Kind))
+              .Append(",\"in\":").Append(nd.InDegree).Append(",\"out\":").Append(nd.OutDegree).Append('}');
+        }
+        sb.Append("},\"links\":[");
+        for (var i = 0; i < links.Count; i++)
+        {
+            if (i > 0) sb.Append(',');
+            var l = links[i];
+            sb.Append("{\"a\":").Append(l.From).Append(",\"b\":").Append(l.To)
+              .Append(",\"w\":").Append(l.Weight).Append(",\"d\":").Append(J(l.Detail)).Append('}');
+        }
+        sb.Append("]}");
+    }
+
+    /// <summary>JSON string literal, safe to embed inside a &lt;script&gt; (escapes &lt; and &amp;).</summary>
+    private static string J(string s)
+    {
+        var sb = new StringBuilder(s.Length + 2).Append('"');
+        foreach (var c in s)
+        {
+            switch (c)
+            {
+                case '"': sb.Append("\\\""); break;
+                case '\\': sb.Append("\\\\"); break;
+                case '\n': sb.Append("\\n"); break;
+                case '\r': sb.Append("\\r"); break;
+                case '\t': sb.Append("\\t"); break;
+                case '<': sb.Append("\\u003c"); break;
+                case '&': sb.Append("\\u0026"); break;
+                default:
+                    if (c < 0x20) sb.Append("\\u").Append(((int)c).ToString("x4", CultureInfo.InvariantCulture));
+                    else sb.Append(c);
+                    break;
+            }
+        }
+        return sb.Append('"').ToString();
     }
 
     /// <summary>A quadratic curve from a's edge to b's edge, bowed to one side so A→B and B→A don't overlap.</summary>
@@ -247,7 +305,23 @@ public static class ProjectMapBuilder
         svg.has-focus .node{opacity:.18}
         svg.has-focus .edge.active{opacity:.95;stroke:var(--bdd)}
         svg.has-focus .node.active{opacity:1}
+        .node.pinned circle{stroke:var(--bdd);stroke-width:3}
         @media(prefers-reduced-motion:no-preference){.edge,.node{transition:opacity .12s}}
+        #panel{position:fixed;top:12px;right:12px;bottom:12px;width:min(340px,calc(100vw - 24px));z-index:6;
+        background:color-mix(in srgb,var(--card) 94%,transparent);backdrop-filter:blur(8px);border:1px solid var(--line);
+        border-radius:12px;box-shadow:0 4px 18px rgba(0,0,0,.16);padding:16px 16px 8px;overflow:auto}
+        #panel[hidden]{display:none}
+        .pclose{position:absolute;top:10px;right:10px}
+        .p-name{font-size:16px;font-weight:600;margin:0 26px 2px 0;word-break:break-word}
+        .p-kind{color:var(--faint);font-size:12px;margin-bottom:14px}
+        .p-sec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:600;
+        margin:14px 0 6px}
+        .p-item{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;padding:7px 8px;
+        border-radius:8px;color:var(--ink);font:inherit}
+        .p-item:hover{background:color-mix(in srgb,var(--bdd) 12%,transparent)}
+        .p-item .pi-name{font-weight:500}
+        .p-item .pi-detail{display:block;color:var(--faint);font-size:11.5px;font-family:var(--mono);margin-top:1px}
+        .p-empty{color:var(--faint);font-size:12.5px;padding:2px 8px}
         """;
 
     // Runs in <head> before paint so a saved manual theme choice applies without a flash.
@@ -258,27 +332,67 @@ public static class ProjectMapBuilder
     private const string Js = """
         (function(){
           var svg=document.getElementById('g'); if(!svg) return;
+          var DATA=window.__MAP__||{n:{},links:[]};
           var edges=[].slice.call(svg.querySelectorAll('.edge'));
           var nodes=[].slice.call(svg.querySelectorAll('.node'));
-          // hover-to-isolate: highlight a node's in/out edges and their endpoints.
+          var byId={}; nodes.forEach(function(nd){byId[nd.getAttribute('data-id')]=nd;});
+          var pinned=null;
+
+          function highlight(id){
+            var keep={}; keep[id]=1;
+            edges.forEach(function(e){
+              var a=e.getAttribute('data-a'),b=e.getAttribute('data-b'),on=(a===id||b===id);
+              e.classList.toggle('active',on); if(on){keep[a]=1;keep[b]=1;}
+            });
+            nodes.forEach(function(m){m.classList.toggle('active',!!keep[m.getAttribute('data-id')]);});
+            svg.classList.add('has-focus');
+          }
+          function clearHL(){
+            svg.classList.remove('has-focus');
+            edges.forEach(function(e){e.classList.remove('active');});
+            nodes.forEach(function(m){m.classList.remove('active');});
+          }
+          function esc(s){var d=document.createElement('div'); d.textContent=(s==null?'':s); return d.innerHTML;}
+          function list(arr,key){
+            if(!arr.length) return '<div class="p-empty">none</div>';
+            return arr.map(function(l){var oid=l[key], nm=(DATA.n[oid]||{}).name||('#'+oid);
+              return '<button class="p-item" onclick="pin('+oid+')"><span class="pi-name">'+esc(nm)
+                +'</span><span class="pi-detail">'+esc(l.d)+'</span></button>';
+            }).join('');
+          }
+          function openPanel(id){
+            var m=DATA.n[id]; if(!m) return;
+            var out=DATA.links.filter(function(l){return String(l.a)===id;}).sort(function(x,y){return y.w-x.w;});
+            var inc=DATA.links.filter(function(l){return String(l.b)===id;}).sort(function(x,y){return y.w-x.w;});
+            var h='<div class="p-name">'+esc(m.name)+'</div><div class="p-kind">'+esc(m.kind)
+              +' · depended on by '+m.in+' · depends on '+m.out+'</div>';
+            h+='<div class="p-sec">Depends on ('+out.length+')</div>'+list(out,'b');
+            h+='<div class="p-sec">Depended on by ('+inc.length+')</div>'+list(inc,'a');
+            document.getElementById('panel-body').innerHTML=h;
+            document.getElementById('panel').hidden=false;
+          }
+
+          window.pin=function(id){
+            id=String(id); if(!DATA.n[id]) return;
+            if(pinned && byId[pinned]) byId[pinned].classList.remove('pinned');
+            pinned=id; highlight(id);
+            if(byId[id]) byId[id].classList.add('pinned');
+            openPanel(id);
+          };
+          window.unpin=function(){
+            if(pinned && byId[pinned]) byId[pinned].classList.remove('pinned');
+            pinned=null; clearHL(); document.getElementById('panel').hidden=true;
+          };
+
           nodes.forEach(function(nd){
-            nd.addEventListener('mouseenter',function(){
-              var id=nd.getAttribute('data-id'); var keep={}; keep[id]=1;
-              edges.forEach(function(e){
-                var a=e.getAttribute('data-a'),b=e.getAttribute('data-b');
-                if(a===id||b===id){e.classList.add('active');keep[a]=1;keep[b]=1;}
-              });
-              nodes.forEach(function(m){ if(keep[m.getAttribute('data-id')]) m.classList.add('active'); });
-              svg.classList.add('has-focus');
-            });
-            nd.addEventListener('mouseleave',function(){
-              svg.classList.remove('has-focus');
-              edges.forEach(function(e){e.classList.remove('active');});
-              nodes.forEach(function(m){m.classList.remove('active');});
-            });
+            var id=nd.getAttribute('data-id');
+            nd.addEventListener('mouseenter',function(){ if(pinned===null) highlight(id); });
+            nd.addEventListener('mouseleave',function(){ if(pinned===null) clearHL(); });
+            nd.addEventListener('click',function(ev){ ev.stopPropagation(); pin(id); });
           });
-          // pan + zoom via viewBox.
-          var vb={x:0,y:0,w:1000,h:1040};
+
+          // pan + zoom via viewBox; a background click (no drag) clears the pin.
+          var vb={x:0,y:0,w:1000,h:1040}, drag=null, moved=false;
           function apply(){svg.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h);}
           svg.addEventListener('wheel',function(ev){
             ev.preventDefault();
@@ -288,15 +402,16 @@ public static class ProjectMapBuilder
             k=Math.max(0.2, Math.min(6, k*(vb.w/1000)))/(vb.w/1000);
             vb.x=mx-(mx-vb.x)*k; vb.y=my-(my-vb.y)*k; vb.w*=k; vb.h*=k; apply();
           },{passive:false});
-          var drag=null;
-          svg.addEventListener('pointerdown',function(ev){drag={x:ev.clientX,y:ev.clientY};svg.classList.add('grabbing');svg.setPointerCapture(ev.pointerId);});
+          svg.addEventListener('pointerdown',function(ev){drag={x:ev.clientX,y:ev.clientY};moved=false;svg.classList.add('grabbing');svg.setPointerCapture(ev.pointerId);});
           svg.addEventListener('pointermove',function(ev){
             if(!drag) return; var r=svg.getBoundingClientRect();
+            if(Math.abs(ev.clientX-drag.x)+Math.abs(ev.clientY-drag.y)>3) moved=true;
             vb.x-=(ev.clientX-drag.x)/r.width*vb.w; vb.y-=(ev.clientY-drag.y)/r.height*vb.h;
             drag.x=ev.clientX; drag.y=ev.clientY; apply();
           });
           function end(){drag=null;svg.classList.remove('grabbing');}
           svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
+          svg.addEventListener('click',function(ev){ if(!moved && !ev.target.closest('.node')) unpin(); });
         })();
         function toggleHeader(){
           var t=document.getElementById('top'); t.classList.toggle('collapsed');

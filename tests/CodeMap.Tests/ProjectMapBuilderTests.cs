@@ -89,6 +89,26 @@ public sealed class ProjectMapBuilderTests
     }
 
     [Fact]
+    public void Embeds_a_dependency_panel_with_the_adjacency_data()
+    {
+        var html = ProjectMapBuilder.Build(Doc());
+
+        // Panel scaffolding + pin/unpin behaviour.
+        Assert.Contains("id=\"panel\"", html);
+        Assert.Contains("window.pin=function", html);
+        Assert.Contains("window.unpin=function", html);
+        Assert.Contains("Depends on", html);
+        Assert.Contains("Depended on by", html);
+
+        // The data blob carries node labels and the one cross-project link with its kind/count detail,
+        // so the panel can list "Feature.A → Lib.B · 1 binds_to". Names are JSON-escaped (< → <).
+        Assert.Contains("window.__MAP__=", html);
+        Assert.Contains("\"a\":1,\"b\":2,\"w\":1,\"d\":\"1 binds_to\"", html);
+        Assert.Contains("Lib.B \\u003cb>", html);       // the < is <-escaped inside the <script> blob
+        Assert.DoesNotContain("Lib.B <b>", html);       // never a raw tag that could break the script
+    }
+
+    [Fact]
     public void Handles_a_map_with_no_projects()
     {
         var html = ProjectMapBuilder.Build(new MapDocument { UserVersion = MapSchema.Version });

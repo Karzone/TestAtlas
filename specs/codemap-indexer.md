@@ -209,9 +209,12 @@ The `map` command is a companion visualization: a **project dependency graph**. 
 A→B ("A depends on B") is derived by aggregating the map's cross-project `binds_to` / `uses_type` /
 `inherits` edges to project level (an edge whose endpoints resolve to two different projects). Nodes
 are laid out on a deterministic circle, sized by in-degree so shared step-definition / page-object
-libraries stand out, coloured by project kind, with hover-to-isolate + pan/zoom. Self-contained
-(inline SVG + vanilla JS, no libraries). Only projects and their cross-project edges are read, so it
-is instant.
+libraries stand out, coloured by project kind, with hover-to-isolate + pan/zoom. **Clicking a project
+pins it** and opens a dependency panel listing what it *depends on* and what *depends on it*, each with
+the underlying link breakdown (e.g. `→ SharedSteps · 340 binds_to`); clicking a panel entry walks the
+chain to that project. A manual light/dark toggle (persisted) and a collapsible header (full-viewport
+graph) round it out. Self-contained (inline SVG + vanilla JS, no libraries). Only projects and their
+cross-project edges are read, so it is instant.
 
 The `report` command is the **v1.x HTML visualization** on the roadmap (§13). It reads a map
 file and emits one self-contained HTML document — inline CSS/JS only, no external stylesheet,
