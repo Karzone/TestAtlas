@@ -17,6 +17,30 @@ public sealed class ClassifierTests
     }
 }
 
+public sealed class MsBuildGuardTests
+{
+    [Fact]
+    public void Picks_the_newest_sdk()
+    {
+        var output = "6.0.428 [/usr/share/dotnet/sdk]\n8.0.129 [/usr/share/dotnet/sdk]\n7.0.100 [/usr/share/dotnet/sdk]\n";
+        Assert.Equal(Path.Combine("/usr/share/dotnet/sdk", "8.0.129"), MsBuildGuard.ParseNewestSdkDir(output));
+    }
+
+    [Fact]
+    public void Handles_windows_paths_and_preview_versions()
+    {
+        var output = "8.0.400 [C:\\Program Files\\dotnet\\sdk]\r\n9.0.100-preview.3 [C:\\Program Files\\dotnet\\sdk]\r\n";
+        Assert.Equal(Path.Combine("C:\\Program Files\\dotnet\\sdk", "9.0.100-preview.3"),
+            MsBuildGuard.ParseNewestSdkDir(output));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("no brackets here")]
+    public void Returns_null_when_no_sdk_line(string output)
+        => Assert.Null(MsBuildGuard.ParseNewestSdkDir(output));
+}
+
 public sealed class GlobTests
 {
     [Theory]
