@@ -176,6 +176,9 @@ public static class Commands
         var usesType = doc.Edges.Count(e => e.EdgeKind == EdgeKinds.UsesType);
         Console.WriteLine($"structural edges: {inherits} inherits, {usesType} uses_type");
 
+        var endpointCalls = doc.Edges.Count(e => e.EdgeKind == EdgeKinds.CallsEndpoint);
+        Console.WriteLine($"endpoints: {doc.Endpoints.Count} ({endpointCalls} call site(s))");
+
         var errors = doc.Diagnostics.Count(d => d.Severity == "error");
         var warnings = doc.Diagnostics.Count(d => d.Severity == "warning");
         Console.WriteLine($"diagnostics: {doc.Diagnostics.Count} ({errors} error(s), {warnings} warning(s))");
@@ -395,8 +398,9 @@ public static class Commands
         if (OptionValue(args, "--class") is { } cls) query = new ImpactQuery(ImpactTargetKind.Class, cls);
         else if (OptionValue(args, "--method") is { } method) query = new ImpactQuery(ImpactTargetKind.Method, method);
         else if (OptionValue(args, "--step") is { } step) query = new ImpactQuery(ImpactTargetKind.Step, step);
+        else if (OptionValue(args, "--endpoint") is { } ep) query = new ImpactQuery(ImpactTargetKind.Endpoint, ep);
         if (query is null)
-            return BadArgs("specify a target: --class <Name> | --method <Name> | --step <expression-substring>");
+            return BadArgs("specify a target: --class <Name> | --method <Name> | --step <expr-substring> | --endpoint <route-substring>");
 
         MapDocument doc;
         try { doc = MapReader.Read(dbPath); }
@@ -499,7 +503,7 @@ public static class Commands
                   --html <file>       output path (default <db>.html)
               testatlas map [<db>]        write a self-contained project dependency graph
                   --html <file>       output path (default <db>-map.html)
-              testatlas impact [<db>] --class <Name> | --method <Name> | --step <expr>
+              testatlas impact [<db>] --class <Name> | --method <Name> | --step <expr> | --endpoint <route>
                                           blast radius: scenarios affected by changing an entity
               testatlas search [<db>] <query>   FTS5 search over step definitions and scenarios
                   --steps             step definitions only

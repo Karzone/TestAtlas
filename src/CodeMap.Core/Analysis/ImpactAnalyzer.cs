@@ -4,7 +4,7 @@ using TestAtlas.Core.Storage;
 namespace TestAtlas.Core.Analysis;
 
 /// <summary>What kind of entity the impact query targets.</summary>
-public enum ImpactTargetKind { Class, Method, Step }
+public enum ImpactTargetKind { Class, Method, Step, Endpoint }
 
 /// <summary>An impact query: "what scenarios are affected if I change &lt;value&gt;?"</summary>
 public sealed record ImpactQuery(ImpactTargetKind Kind, string Value);
@@ -46,7 +46,11 @@ public static class ImpactAnalyzer
             if (e.EdgeKind == EdgeKinds.BindsTo && e.FromKind == RefKinds.ScenarioStep && e.ToKind == RefKinds.StepDefinition && e.ToId is int sd)
                 (boundBy.TryGetValue(sd, out var l) ? l : (boundBy[sd] = new())).Add(e.FromId);
 
-        var (affectedStepDefs, label) = ResolveTargets(doc, query, classById, classOfMethod, stepDefsByMethod, usesEdges, inheritsEdges);
+        // calls_endpoint: method → endpoint (for --endpoint queries).
+        var endpointCalls = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.CallsEndpoint && e.FromKind == RefKinds.Method && e.ToId is int)
+            .Select(e => (Method: e.FromId, Endpoint: e.ToId!.Value)).ToList();
+
+        var (affectedStepDefs, label) = ResolveTargets(doc, query, classById, classOfMethod, stepDefsByMethod, usesEdges, inheritsEdges, endpointCalls);
         if (affectedStepDefs.Count == 0)
             return new ImpactResult(false, label, 0, 0, Array.Empty<AffectedScenario>());
 
@@ -88,12 +92,39 @@ public static class ImpactAnalyzer
         IReadOnlyDictionary<int, int> classOfMethod,
         IReadOnlyDictionary<int, List<int>> stepDefsByMethod,
         List<(int Method, int Class)> usesEdges,
-        List<(int Derived, int Base)> inheritsEdges)
+        List<(int Derived, int Base)> inheritsEdges,
+        List<(int Method, int Endpoint)> endpointCalls)
     {
         var affected = new HashSet<int>();
 
         switch (query.Kind)
         {
+            case ImpactTargetKind.Endpoint:
+            {
+                // Endpoints whose route contains the query → the methods that call them.
+                var matched = doc.Endpoints
+                    .Where(e => e.Route.Contains(query.Value, StringComparison.OrdinalIgnoreCase)).ToList();
+                var matchedIds = matched.Select(e => e.Id).ToHashSet();
+                var seedMethods = endpointCalls.Where(c => matchedIds.Contains(c.Endpoint)).Select(c => c.Method).ToHashSet();
+
+                // Direct: the calling method IS a step definition.
+                foreach (var m in seedMethods)
+                    if (stepDefsByMethod.TryGetValue(m, out var sd)) affected.UnionWith(sd);
+
+                // Indirect: the calling method lives in a client/helper class — step methods that use
+                // that class (transitively, same reach rules as a class change) are affected too.
+                var seedClasses = seedMethods
+                    .Select(m => classOfMethod.TryGetValue(m, out var c) ? c : -1)
+                    .Where(c => c >= 0).ToHashSet();
+                var reach = ExpandReach(seedClasses, usesEdges, inheritsEdges, classOfMethod);
+                var reachedMethods = usesEdges.Where(e => reach.Contains(e.Class)).Select(e => e.Method).ToHashSet();
+                foreach (var s in doc.StepDefinitions)
+                    if (reachedMethods.Contains(s.MethodId)) affected.Add(s.Id);
+
+                var verbs = string.Join(", ", matched.Take(3).Select(e => $"{e.Verb} {e.Route}"));
+                var suffix = matched.Count > 3 ? $" … +{matched.Count - 3} more" : "";
+                return (affected, $"endpoint matching \"{query.Value}\" ({matched.Count} endpoint(s): {verbs}{suffix})");
+            }
             case ImpactTargetKind.Step:
             {
                 var matches = doc.StepDefinitions
@@ -125,15 +156,7 @@ public static class ImpactAnalyzer
 
                 // reachSet: also classes whose methods use an affected class — so impact flows through
                 // composed page objects (PageB ← PageA ← StepClass), transitively.
-                var reach = new HashSet<int>(inheritClosure);
-                do
-                {
-                    grew = false;
-                    foreach (var (m, c) in usesEdges)
-                        if (reach.Contains(c) && classOfMethod.TryGetValue(m, out var owner) && reach.Add(owner)) grew = true;
-                    foreach (var (d, b) in inheritsEdges)
-                        if (reach.Contains(b) && reach.Add(d)) grew = true;
-                } while (grew);
+                var reach = ExpandReach(inheritClosure, usesEdges, inheritsEdges, classOfMethod);
 
                 // A step def is affected if its class is directly changed (inheritClosure), or its method
                 // uses a class in the reach set (precise: sibling step methods are NOT swept in).
@@ -148,5 +171,29 @@ public static class ImpactAnalyzer
                 return (affected, $"class {query.Value} ({kind}{derivedNote})");
             }
         }
+    }
+
+    /// <summary>
+    /// Transitive reach of a set of changed classes: classes deriving from them plus classes whose
+    /// methods use any reached class — repeated to a fixpoint, so impact flows through composed
+    /// page objects / client wrappers.
+    /// </summary>
+    private static HashSet<int> ExpandReach(
+        HashSet<int> seed,
+        List<(int Method, int Class)> usesEdges,
+        List<(int Derived, int Base)> inheritsEdges,
+        IReadOnlyDictionary<int, int> classOfMethod)
+    {
+        var reach = new HashSet<int>(seed);
+        bool grew;
+        do
+        {
+            grew = false;
+            foreach (var (m, c) in usesEdges)
+                if (reach.Contains(c) && classOfMethod.TryGetValue(m, out var owner) && reach.Add(owner)) grew = true;
+            foreach (var (d, b) in inheritsEdges)
+                if (reach.Contains(b) && reach.Add(d)) grew = true;
+        } while (grew);
+        return reach;
     }
 }

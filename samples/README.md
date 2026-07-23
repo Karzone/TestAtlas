@@ -99,5 +99,16 @@ dotnet run --project src/CodeMap.Cli -- impact reqdemo.db --step "user logs in"
 step definition to the affected scenarios and features. Great before a refactor or when a step /
 page object is flaky.
 
+### Endpoints (API blast radius)
+
+```bash
+dotnet run --project src/CodeMap.Cli -- impact reqdemo.db --endpoint "/api/orders"
+```
+
+Slice 4 extracts the **HTTP endpoints** test code calls (verb + route template — HttpClient,
+RestSharp, Refit, or any custom wrapper via the generic verb-name fallback) and ties them to
+scenarios through `calls_endpoint` edges. `impact --endpoint <route>` answers "which scenarios break
+if this API changes?" — the API-test symmetric of the page-object case.
+
 > The same commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.

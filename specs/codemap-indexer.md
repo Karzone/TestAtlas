@@ -96,6 +96,14 @@ and line locations.
 - **Scenario** — name, kind (`scenario | scenario_outline`), tags (own + inherited),
   example-table row count for outlines.
 - **ScenarioStep** — ordered steps within a scenario: keyword, text, docstring/table flag.
+- **Endpoint** — an HTTP endpoint referenced by test code: verb + route template (e.g.
+  `POST /api/orders/{id}`), deduplicated solution-wide on (verb, route). Extracted **syntactically**
+  and solution-agnostically via a ladder: known client shapes (`HttpClient`'s `GetAsync`/
+  `PostAsJsonAsync`/…, `new HttpRequestMessage(HttpMethod.X, …)`, RestSharp's `new RestRequest(…,
+  Method.X)`, Refit-style `[Get("…")]` attributes) plus a **generic fallback** for custom wrappers
+  (any invocation named with a verb word — `Get/Post/Put/Patch/Delete` — passing a strictly
+  route-like literal: starts with `/`, or contains `://` or `/{`). Interpolated strings become
+  templates (`$"/o/{id}"` → `/o/{id}`); fully dynamic URLs degrade to nothing, never an error.
 
 ### 5.2 Edges
 
@@ -108,6 +116,7 @@ A single `edges` table: `(from_kind, from_id, to_kind, to_id, edge_kind, confide
 | `calls` | Method → Method | Direct invocation found by Roslyn (single hop; consumers can walk the graph for transitive reach) |
 | `uses_type` | Method → Class | Method constructs, receives, or dereferences the class (how step classes reach page objects/API clients) |
 | `inherits` | Class → Class | Base-type relationship within the solution |
+| `calls_endpoint` | Method → Endpoint | The method makes an HTTP call to the endpoint (route template) |
 
 **Keyword-agnostic matching.** A step binds to a definition on **text alone** — the Given/When/Then
 keyword is deliberately *not* used to filter candidates, because Reqnroll/SpecFlow themselves ignore
@@ -123,8 +132,8 @@ projects; scoping per-project reported the majority of real steps as falsely `un
 suite, ~29k of ~55k "unbound" steps had their exact text defined in another project). The trade-off is
 that a step text defined in more than one project surfaces as `ambiguous` — which is the honest signal.
 
-**Implementation status.** `binds_to` / `unbound` (slice 2b) and `inherits` / `uses_type` (slice 3)
-are built. All are resolved **syntactically** — by simple type name across the solution — to preserve
+**Implementation status.** `binds_to` / `unbound` (slice 2b), `inherits` / `uses_type` (slice 3),
+and `calls_endpoint` (slice 4) are built. All are resolved **syntactically** — by simple type name across the solution — to preserve
 the "works on unrestored projects" guarantee (G3): `inherits` matches a class's base-type name to a
 solution class; `uses_type` matches the type-names a method mentions (parameter/return/`new`/local
 types and the types of dereferenced fields/properties) to the **page-object / API-client** classes it
@@ -201,6 +210,7 @@ codemap impact [<db>]      Blast radius: scenarios affected by changing an entit
     --class <Name>         a page object / API client / step class
     --method <Name>        a specific method
     --step <expr-substr>   step definitions whose expression contains this
+    --endpoint <route-substr>  endpoints whose route contains this (API blast radius)
 
 codemap search [<db>] <query>   FTS5 search over step definitions and scenarios
     --steps                Step definitions only
@@ -220,6 +230,9 @@ which test scenarios could break?"*. From the changed entity it follows `inherit
 step is affected when its method reaches the changed class), with method-level precision so sibling
 step methods in the same class are not swept in. Needs no restored build. For finer "which page-object
 *method*" precision the deferred `calls` edge (semantic model) would be required.
+`--endpoint` inverts the `calls_endpoint` edges: endpoints matching the route substring → the methods
+that call them (directly a step definition, or a client/wrapper method whose class step methods use)
+→ the binding scenarios. This is the API-change blast radius — symmetric with the UI page-object case.
 
 The `map` command is a companion visualization: a **project dependency graph**. A directed edge
 A→B ("A depends on B") is derived by aggregating the map's cross-project `binds_to` / `uses_type` /
@@ -297,6 +310,9 @@ Unknown config keys are a warning, not an error (forward compatibility).
   links resolved by the matcher; and the FTS5 tables `search_steps` (step-definition
   expression / method / class) and `search_scenarios` (feature / scenario / step text / tags).
   Migration: re-run `codemap index`.
+- `user_version = 4` — adds the `endpoints` table and `calls_endpoint` edges (slice 4): the HTTP
+  verb + route templates test code calls, tying scenarios to the APIs they exercise. Migration:
+  re-run `codemap index`.
 
 ## 10. Performance targets
 

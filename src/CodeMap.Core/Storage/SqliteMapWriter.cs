@@ -93,6 +93,7 @@ public static class SqliteMapWriter
                 InsertFeatures(conn, tx, result.Features);
                 InsertScenarios(conn, tx, result.Scenarios);
                 InsertScenarioSteps(conn, tx, result.ScenarioSteps);
+                InsertEndpoints(conn, tx, result.Endpoints);
                 InsertEdges(conn, tx, result.Edges);
                 InsertDiagnostics(conn, tx, result.Diagnostics);
                 PopulateSearch(conn, tx, result);
@@ -306,6 +307,19 @@ public static class SqliteMapWriter
             id.Value = s.Id; sid.Value = s.ScenarioId; pid.Value = s.ProjectId; kw.Value = s.Keyword;
             txt.Value = s.Text; o.Value = s.Ordinal; ds.Value = s.HasDocString ? 1 : 0; tb.Value = s.HasDataTable ? 1 : 0;
             fp.Value = s.FilePath; ls.Value = s.LineStart;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertEndpoints(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<EndpointEntity> endpoints)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "INSERT INTO endpoints(id, verb, route) VALUES ($id,$v,$r);";
+        var id = Add(cmd, "$id"); var v = Add(cmd, "$v"); var r = Add(cmd, "$r");
+        foreach (var e in endpoints)
+        {
+            id.Value = e.Id; v.Value = e.Verb; r.Value = e.Route;
             cmd.ExecuteNonQuery();
         }
     }

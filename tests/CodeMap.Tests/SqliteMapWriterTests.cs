@@ -17,7 +17,12 @@ public sealed class SqliteMapWriterTests
         new[] { new FeatureEntity(1, 1, "F", "desc", "@tag", "F.feature") },
         new[] { new ScenarioEntity(1, 1, 1, "S", "scenario", "@tag", 0, "F.feature", 3) },
         new[] { new ScenarioStepEntity(1, 1, 1, "Given", "a thing", 0, false, false, "F.feature", 4) },
-        new[] { new EdgeEntity(RefKinds.ScenarioStep, 1, RefKinds.StepDefinition, 1, EdgeKinds.BindsTo, BindConfidence.Exact) },
+        new[] { new EndpointEntity(1, "POST", "/api/orders") },
+        new[]
+        {
+            new EdgeEntity(RefKinds.ScenarioStep, 1, RefKinds.StepDefinition, 1, EdgeKinds.BindsTo, BindConfidence.Exact),
+            new EdgeEntity(RefKinds.Method, 1, RefKinds.Endpoint, 1, EdgeKinds.CallsEndpoint, ""),
+        },
         Array.Empty<DiagnosticEntity>(),
         IndexOutcome.Success);
 
@@ -102,9 +107,15 @@ public sealed class SqliteMapWriterTests
         Assert.Single(doc.Scenarios);
         var st = Assert.Single(doc.ScenarioSteps);
         Assert.Equal("a thing", st.Text);
-        var e = Assert.Single(doc.Edges);
-        Assert.Equal(EdgeKinds.BindsTo, e.EdgeKind);
-        Assert.Equal(BindConfidence.Exact, e.Confidence);
+        var ep = Assert.Single(doc.Endpoints);
+        Assert.Equal("POST", ep.Verb);
+        Assert.Equal("/api/orders", ep.Route);
+        Assert.Equal(2, doc.Edges.Count);
+        var bind = doc.Edges.Single(x => x.EdgeKind == EdgeKinds.BindsTo);
+        Assert.Equal(BindConfidence.Exact, bind.Confidence);
+        var call = doc.Edges.Single(x => x.EdgeKind == EdgeKinds.CallsEndpoint);
+        Assert.Equal(RefKinds.Endpoint, call.ToKind);
+        Assert.Equal(ep.Id, call.ToId);
         Assert.Equal("9.9.9", doc.Meta[MapSchema.MetaToolVersion]);
     }
 }

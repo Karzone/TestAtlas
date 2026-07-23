@@ -29,6 +29,9 @@ public sealed record ScenarioRow(int Id, int FeatureId, int ProjectId, string Na
 public sealed record ScenarioStepRow(int Id, int ScenarioId, int ProjectId, string Keyword, string Text,
     int Ordinal, bool HasDocString, bool HasDataTable, string FilePath, int LineStart);
 
+/// <summary>A projected endpoint row (spec §5.1, slice 4).</summary>
+public sealed record EndpointRow(int Id, string Verb, string Route);
+
 /// <summary>A projected edge row.</summary>
 public sealed record EdgeRow(string FromKind, int FromId, string ToKind, int? ToId, string EdgeKind, string? Confidence);
 
@@ -47,6 +50,7 @@ public sealed class MapDocument
     public IReadOnlyList<FeatureRow> Features { get; init; } = Array.Empty<FeatureRow>();
     public IReadOnlyList<ScenarioRow> Scenarios { get; init; } = Array.Empty<ScenarioRow>();
     public IReadOnlyList<ScenarioStepRow> ScenarioSteps { get; init; } = Array.Empty<ScenarioStepRow>();
+    public IReadOnlyList<EndpointRow> Endpoints { get; init; } = Array.Empty<EndpointRow>();
     public IReadOnlyList<EdgeRow> Edges { get; init; } = Array.Empty<EdgeRow>();
     public IReadOnlyList<DiagnosticRow> Diagnostics { get; init; } = Array.Empty<DiagnosticRow>();
 }
@@ -77,6 +81,7 @@ public static class MapReader
             Features = ReadFeatures(conn),
             Scenarios = ReadScenarios(conn),
             ScenarioSteps = ReadScenarioSteps(conn),
+            Endpoints = ReadEndpoints(conn),
             Edges = ReadEdges(conn),
             Diagnostics = ReadDiagnostics(conn),
         };
@@ -173,6 +178,9 @@ public static class MapReader
         foreach (var s in doc.ScenarioSteps)
             sb.Append("step|").Append(s.Id).Append('|').Append(s.ScenarioId).Append('|').Append(s.Keyword)
               .Append('|').Append(s.Text).Append('|').Append(s.Ordinal).Append('|').Append(s.LineStart).Append('\n');
+
+        foreach (var e in doc.Endpoints)
+            sb.Append("endpoint|").Append(e.Id).Append('|').Append(e.Verb).Append('|').Append(e.Route).Append('\n');
 
         foreach (var e in doc.Edges)
             sb.Append("edge|").Append(e.FromKind).Append('|').Append(e.FromId).Append('|').Append(e.ToKind)
@@ -317,6 +325,18 @@ public static class MapReader
         while (r.Read())
             list.Add(new EdgeRow(r.GetString(0), r.GetInt32(1), r.GetString(2),
                 r.IsDBNull(3) ? null : r.GetInt32(3), r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5)));
+        return list;
+    }
+
+    private static List<EndpointRow> ReadEndpoints(SqliteConnection conn)
+    {
+        var list = new List<EndpointRow>();
+        if (!TableExists(conn, "endpoints")) return list; // tolerate pre-v4 maps
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT id, verb, route FROM endpoints ORDER BY id;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new EndpointRow(r.GetInt32(0), r.GetString(1), r.GetString(2)));
         return list;
     }
 

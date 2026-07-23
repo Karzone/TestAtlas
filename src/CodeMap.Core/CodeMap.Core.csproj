@@ -15,6 +15,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Pure parser-level tests (e.g. SyntaxScan.EndpointCalls) exercise internals directly. -->
+    <InternalsVisibleTo Include="TestAtlas.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Roslyn: MSBuildWorkspace loads the solution; CSharp.Workspaces gives syntax/semantic models. -->
     <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.11.0" />

@@ -132,13 +132,22 @@ public sealed record ScenarioStepEntity(
     int Id, int ScenarioId, int ProjectId, string Keyword, string Text, int Ordinal,
     bool HasDocString, bool HasDataTable, string FilePath, int LineStart);
 
+/// <summary>
+/// An HTTP endpoint referenced by test code (spec §5.1, slice 4): the verb + route template a method
+/// calls (e.g. <c>POST /api/orders/{id}</c>). Deduplicated solution-wide on (Verb, Route); call sites
+/// are the <c>calls_endpoint</c> edges. <paramref name="Verb"/> is <c>ANY</c> when it could not be
+/// inferred from the call shape.
+/// </summary>
+public sealed record EndpointEntity(int Id, string Verb, string Route);
+
 /// <summary>Edge-kind vocabulary (spec §5.2).</summary>
 public static class EdgeKinds
 {
     public const string BindsTo = "binds_to";
     public const string Unbound = "unbound";
-    public const string Inherits = "inherits";   // Class → Class (base type within the solution)
-    public const string UsesType = "uses_type";  // Method → Class (constructs/receives/dereferences it)
+    public const string Inherits = "inherits";       // Class → Class (base type within the solution)
+    public const string UsesType = "uses_type";      // Method → Class (constructs/receives/dereferences it)
+    public const string CallsEndpoint = "calls_endpoint"; // Method → Endpoint (HTTP call in the body)
 }
 
 /// <summary>from/to entity-kind labels used in the edges table.</summary>
@@ -148,6 +157,7 @@ public static class RefKinds
     public const string StepDefinition = "step_definition";
     public const string Class = "class";
     public const string Method = "method";
+    public const string Endpoint = "endpoint";
 }
 
 /// <summary>binds_to confidence (spec §5.2).</summary>
@@ -170,6 +180,7 @@ public sealed record IndexResult(
     IReadOnlyList<FeatureEntity> Features,
     IReadOnlyList<ScenarioEntity> Scenarios,
     IReadOnlyList<ScenarioStepEntity> ScenarioSteps,
+    IReadOnlyList<EndpointEntity> Endpoints,
     IReadOnlyList<EdgeEntity> Edges,
     IReadOnlyList<DiagnosticEntity> Diagnostics,
     IndexOutcome Outcome);

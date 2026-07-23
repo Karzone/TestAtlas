@@ -17,6 +17,7 @@ public sealed class DeterminismTests
         Array.Empty<FeatureEntity>(),
         Array.Empty<ScenarioEntity>(),
         Array.Empty<ScenarioStepEntity>(),
+        Array.Empty<EndpointEntity>(),
         Array.Empty<EdgeEntity>(),
         Array.Empty<DiagnosticEntity>(),
         IndexOutcome.Success);

@@ -1,4 +1,5 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using TestAtlas.Core.Model;
 
@@ -182,6 +183,157 @@ internal static class SyntaxScan
             };
             if (name is not null && name != "var") yield return name;
         }
+    }
+
+    // ---- endpoint extraction (spec §5.1 Endpoint, slice 4) ---------------------------------------
+
+    /// <summary>Known HTTP-client method names → verb (HttpClient / RestSharp / Flurl style).</summary>
+    private static readonly Dictionary<string, string> HttpMethodNames = new(StringComparer.Ordinal)
+    {
+        ["GetAsync"] = "GET", ["GetStringAsync"] = "GET", ["GetStreamAsync"] = "GET",
+        ["GetByteArrayAsync"] = "GET", ["GetFromJsonAsync"] = "GET", ["GetJsonAsync"] = "GET",
+        ["PostAsync"] = "POST", ["PostAsJsonAsync"] = "POST", ["PostJsonAsync"] = "POST",
+        ["PutAsync"] = "PUT", ["PutAsJsonAsync"] = "PUT", ["PutJsonAsync"] = "PUT",
+        ["PatchAsync"] = "PATCH", ["PatchAsJsonAsync"] = "PATCH",
+        ["DeleteAsync"] = "DELETE", ["DeleteFromJsonAsync"] = "DELETE", ["DeleteJsonAsync"] = "DELETE",
+    };
+
+    private static readonly string[] GenericVerbs = { "Get", "Post", "Put", "Patch", "Delete" };
+
+    /// <summary>Refit-style HTTP attributes.</summary>
+    private static readonly Dictionary<string, string> HttpAttrNames = new(StringComparer.Ordinal)
+    {
+        ["Get"] = "GET", ["Post"] = "POST", ["Put"] = "PUT", ["Patch"] = "PATCH",
+        ["Delete"] = "DELETE", ["Head"] = "HEAD",
+    };
+
+    /// <summary>
+    /// The HTTP endpoints a method calls, as (verb, route-template) pairs — purely syntactic, so it
+    /// works on unrestored projects and is deliberately solution-agnostic. Ladder (spec §5.1):
+    /// 1. known client method names (HttpClient/Flurl: <c>GetAsync("/x")</c>, <c>PostAsJsonAsync</c>…);
+    /// 2. <c>SendAsync(new HttpRequestMessage(HttpMethod.X, "/x"))</c>;
+    /// 3. <c>new RestRequest("/x", Method.X)</c> (RestSharp);
+    /// 4. Refit-style <c>[Get("/x")]</c> attributes on the method;
+    /// 5. generic fallback for custom wrappers: any invocation whose name starts with a verb word
+    ///    (<c>Get/Post/Put/Patch/Delete</c>) passing a strictly route-like literal (starts with '/',
+    ///    or contains '://' or '/{'). Interpolated strings become templates (<c>$"/o/{id}"</c> →
+    ///    <c>/o/{id}</c>). Anything unrecognised produces nothing — never an error.
+    /// </summary>
+    public static List<(string Verb, string Route)> EndpointCalls(MethodDeclarationSyntax method)
+    {
+        var found = new List<(string, string)>();
+
+        // 4. Refit-style attributes on the method itself.
+        foreach (var attr in Attributes(method.AttributeLists))
+        {
+            var name = AttrSimpleName(attr);
+            if (!HttpAttrNames.TryGetValue(name, out var verb)) continue;
+            var route = RouteFromExpression(attr.ArgumentList?.Arguments.FirstOrDefault()?.Expression);
+            if (route is not null && IsRouteLike(route, strict: false)) found.Add((verb, route));
+        }
+
+        SyntaxNode? body = method.Body;
+        body ??= method.ExpressionBody;
+        if (body is null) return found;
+
+        foreach (var node in body.DescendantNodes())
+        {
+            switch (node)
+            {
+                case InvocationExpressionSyntax inv:
+                {
+                    var name = inv.Expression switch
+                    {
+                        MemberAccessExpressionSyntax ma => ma.Name.Identifier.ValueText,
+                        IdentifierNameSyntax id => id.Identifier.ValueText,
+                        GenericNameSyntax g => g.Identifier.ValueText,
+                        MemberBindingExpressionSyntax mb => mb.Name.Identifier.ValueText,
+                        _ => null,
+                    };
+                    if (name is null) break;
+
+                    var firstArg = inv.ArgumentList.Arguments.FirstOrDefault()?.Expression;
+                    var route = RouteFromExpression(firstArg);
+
+                    // 1. Known client method names — relaxed route check (relative "api/x" is common).
+                    if (HttpMethodNames.TryGetValue(name, out var verb))
+                    {
+                        if (route is not null && IsRouteLike(route, strict: false)) found.Add((verb, route));
+                        break;
+                    }
+
+                    // 2. Send/SendAsync(new HttpRequestMessage(…)) needs no special case here — the
+                    //    ObjectCreation case below sees the nested HttpRequestMessage on its own
+                    //    (handling it here too would double-count the same call).
+
+                    // 5. Generic fallback for custom wrappers — strict route check to avoid noise.
+                    var genericVerb = GenericVerbs.FirstOrDefault(v =>
+                        name.StartsWith(v, StringComparison.OrdinalIgnoreCase) &&
+                        (name.Length == v.Length || !char.IsLower(name[v.Length])));
+                    if (genericVerb is not null && route is not null && IsRouteLike(route, strict: true))
+                        found.Add((genericVerb.ToUpperInvariant(), route));
+                    break;
+                }
+                case ObjectCreationExpressionSyntax oc when SimpleBaseName(oc.Type) is "RestRequest":
+                {
+                    // 3. new RestRequest("/x"[, Method.Post]) — verb defaults to GET (RestSharp default).
+                    var route = RouteFromExpression(oc.ArgumentList?.Arguments.FirstOrDefault()?.Expression);
+                    if (route is null || !IsRouteLike(route, strict: false)) break;
+                    var verb = "GET";
+                    foreach (var arg in oc.ArgumentList!.Arguments.Skip(1))
+                        if (arg.Expression is MemberAccessExpressionSyntax ma &&
+                            ma.Expression is IdentifierNameSyntax { Identifier.ValueText: "Method" or "HttpMethod" })
+                            verb = ma.Name.Identifier.ValueText.ToUpperInvariant();
+                    found.Add((verb, route));
+                    break;
+                }
+                case ObjectCreationExpressionSyntax oc when SimpleBaseName(oc.Type) is "HttpRequestMessage":
+                {
+                    if (TryHttpRequestMessage(oc, out var v, out var r)) found.Add((v, r));
+                    break;
+                }
+            }
+        }
+
+        return found;
+    }
+
+    private static bool TryHttpRequestMessage(ObjectCreationExpressionSyntax oc, out string verb, out string route)
+    {
+        verb = "ANY"; route = string.Empty;
+        if (SimpleBaseName(oc.Type) is not "HttpRequestMessage" || oc.ArgumentList is null) return false;
+        foreach (var arg in oc.ArgumentList.Arguments)
+        {
+            if (arg.Expression is MemberAccessExpressionSyntax ma &&
+                ma.Expression is IdentifierNameSyntax { Identifier.ValueText: "HttpMethod" })
+                verb = ma.Name.Identifier.ValueText.ToUpperInvariant();
+            else if (RouteFromExpression(arg.Expression) is { } r && IsRouteLike(r, strict: false))
+                route = r;
+        }
+        return route.Length > 0;
+    }
+
+    /// <summary>A string literal verbatim, or an interpolated string as a route template (holes → <c>{expr}</c>).</summary>
+    private static string? RouteFromExpression(ExpressionSyntax? expr) => expr switch
+    {
+        LiteralExpressionSyntax lit when lit.IsKind(SyntaxKind.StringLiteralExpression) => lit.Token.ValueText,
+        InterpolatedStringExpressionSyntax interp => string.Concat(interp.Contents.Select(c => c switch
+        {
+            InterpolatedStringTextSyntax t => t.TextToken.ValueText,
+            InterpolationSyntax h => "{" + h.Expression.ToString() + "}",
+            _ => string.Empty,
+        })),
+        _ => null,
+    };
+
+    /// <summary>
+    /// Does a string look like a URL path? Relaxed (known client methods): contains '/', no whitespace.
+    /// Strict (generic wrapper fallback): additionally must start with '/' or contain "://" or "/{".
+    /// </summary>
+    private static bool IsRouteLike(string s, bool strict)
+    {
+        if (s.Length == 0 || s.Any(char.IsWhiteSpace) || !s.Contains('/')) return false;
+        return !strict || s.StartsWith('/') || s.Contains("://") || s.Contains("/{");
     }
 
     /// <summary>Simple name of a base type, stripping namespace qualifier and generic args.</summary>

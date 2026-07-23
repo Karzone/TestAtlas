@@ -7,8 +7,8 @@ namespace TestAtlas.Core.Storage;
 /// </summary>
 public static class MapSchema
 {
-    // v3 (slice 2b): adds features/scenarios/scenario_steps/edges + FTS5 search tables.
-    public const int Version = 3;
+    // v4 (slice 4): adds the endpoints table + calls_endpoint edges (HTTP calls in test code).
+    public const int Version = 4;
 
     /// <summary>DDL for a fresh map file. Ordered; safe to run inside one transaction.</summary>
     public const string CreateSql = """
@@ -95,6 +95,12 @@ public static class MapSchema
             has_table     INTEGER NOT NULL,
             file_path     TEXT NOT NULL,
             line_start    INTEGER NOT NULL
+        );
+
+        CREATE TABLE endpoints (
+            id    INTEGER PRIMARY KEY,
+            verb  TEXT NOT NULL,
+            route TEXT NOT NULL
         );
 
         CREATE TABLE edges (

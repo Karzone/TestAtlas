@@ -22,8 +22,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     public void Yields_exact_project_class_method_counts()
     {
         Assert.Equal(2, _fx.Doc.Projects.Count);
-        Assert.Equal(16, _fx.Doc.Classes.Count);
-        Assert.Equal(11, _fx.Doc.Methods.Count);
+        Assert.Equal(17, _fx.Doc.Classes.Count);
+        Assert.Equal(13, _fx.Doc.Methods.Count);
         Assert.Empty(_fx.Doc.Diagnostics);
     }
 
@@ -42,8 +42,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
 
         Assert.Equal(10, ClassesIn(specflow).Count);
         Assert.Equal(8, MethodsIn(specflow).Count);
-        Assert.Equal(6, ClassesIn(reqnroll).Count);
-        Assert.Equal(3, MethodsIn(reqnroll).Count);
+        Assert.Equal(7, ClassesIn(reqnroll).Count);
+        Assert.Equal(5, MethodsIn(reqnroll).Count);
     }
 
     [Fact]
@@ -214,6 +214,23 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
 
         // And it discriminates: a token in no step definition returns nothing.
         Assert.Empty(MapReader.SearchSteps(_fx.DbPath, "zzzznope"));
+    }
+
+    [Fact]
+    public void Endpoints_are_extracted_from_both_a_known_client_and_a_custom_wrapper()
+    {
+        // WhenTheCustomerChecksOut posts via HttpClient (known-client tier); ThenTheOrderIsPlaced
+        // calls the custom ApiExecutor wrapper with an interpolated route (generic tier → template).
+        Assert.Equal(2, _fx.Doc.Endpoints.Count);
+        var post = _fx.Doc.Endpoints.Single(e => e.Verb == "POST");
+        Assert.Equal("/api/orders", post.Route);
+        var get = _fx.Doc.Endpoints.Single(e => e.Verb == "GET");
+        Assert.Equal("/api/orders/{reference}", get.Route);
+
+        // Call-site edges tie the endpoints back to the exact step methods.
+        var checkout = _fx.Doc.Methods.Single(m => m.Name == "WhenTheCustomerChecksOut");
+        Assert.Contains(_fx.Doc.Edges, e =>
+            e.EdgeKind == EdgeKinds.CallsEndpoint && e.FromId == checkout.Id && e.ToId == post.Id);
     }
 
     [Fact]

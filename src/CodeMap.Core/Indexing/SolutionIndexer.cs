@@ -90,6 +90,7 @@ public sealed class SolutionIndexer
                 Array.Empty<FeatureEntity>(),
                 Array.Empty<ScenarioEntity>(),
                 Array.Empty<ScenarioStepEntity>(),
+                Array.Empty<EndpointEntity>(),
                 Array.Empty<EdgeEntity>(),
                 diagnostics,
                 IndexOutcome.Fatal);
@@ -228,6 +229,7 @@ public sealed class SolutionIndexer
         // Structural-edge inputs, gathered as IDs are assigned (resolved after the loop, spec §5.2).
         var classInherits = new List<(int ClassId, string BaseName)>();
         var methodUses = new List<(int MethodId, int ClassId, HashSet<string> Names)>();
+        var methodEndpointCalls = new List<(int MethodId, string Verb, string Route)>();
 
         foreach (var ph in projectHolders) // already ordered by (Name, Path)
         {
@@ -271,6 +273,9 @@ public sealed class SolutionIndexer
 
                     if (mh.UsedTypeNames.Count > 0)
                         methodUses.Add((mid, cid, mh.UsedTypeNames));
+
+                    foreach (var (verb, route) in mh.EndpointCalls)
+                        methodEndpointCalls.Add((mid, verb, route));
 
                     foreach (var sb in mh.StepBindings
                         .OrderBy(s => s.Keyword, StringComparer.Ordinal)
@@ -323,6 +328,22 @@ public sealed class SolutionIndexer
         // ---- inherits / uses_type: the structural graph linking classes + their collaborators ----
         edges.AddRange(BuildStructuralEdges(classes, classInherits, methodUses));
 
+        // ---- endpoints: dedupe (verb, route) solution-wide; call sites become calls_endpoint edges ----
+        var endpoints = methodEndpointCalls
+            .Select(c => (c.Verb, c.Route))
+            .Distinct()
+            .OrderBy(e => e.Route, StringComparer.Ordinal)
+            .ThenBy(e => e.Verb, StringComparer.Ordinal)
+            .Select((e, i) => new EndpointEntity(i + 1, e.Verb, e.Route))
+            .ToList();
+        var endpointId = endpoints.ToDictionary(e => (e.Verb, e.Route), e => e.Id);
+        edges.AddRange(methodEndpointCalls
+            .Select(c => (c.MethodId, EndpointId: endpointId[(c.Verb, c.Route)]))
+            .Distinct()
+            .OrderBy(x => x.MethodId).ThenBy(x => x.EndpointId)
+            .Select(x => new EdgeEntity(RefKinds.Method, x.MethodId, RefKinds.Endpoint, x.EndpointId,
+                EdgeKinds.CallsEndpoint, "")));
+
         // ---- Outcome (spec §7 exit-code contract) ----
         var loadedCount = selected.Count;
         var anyLoadError = diagnostics.Any(d => d.Severity == DiagnosticSeverity.Error);
@@ -344,7 +365,7 @@ public sealed class SolutionIndexer
 
         var meta = new MapMeta(ToolVersion, FormatUtc(_nowUtc()), fullPath, hasher.Compute());
         return new IndexResult(
-            meta, projects, classes, methods, stepDefs, features, scenarios, scenarioSteps, edges, diagnostics, outcome);
+            meta, projects, classes, methods, stepDefs, features, scenarios, scenarioSteps, endpoints, edges, diagnostics, outcome);
     }
 
     /// <summary>
@@ -517,6 +538,7 @@ public sealed class SolutionIndexer
                         LineStart = tree.GetLineSpan(method.Identifier.Span).StartLinePosition.Line + 1,
                         LineEnd = tree.GetLineSpan(method.Span).EndLinePosition.Line + 1,
                         UsedTypeNames = SyntaxScan.UsedTypeNames(method, type),
+                        EndpointCalls = SyntaxScan.EndpointCalls(method),
                     };
 
                     var parameters = string.Join(", ", method.ParameterList.Parameters
@@ -725,6 +747,7 @@ public sealed class SolutionIndexer
         public int LineStart;
         public int LineEnd;
         public HashSet<string> UsedTypeNames = new(StringComparer.Ordinal);
+        public List<(string Verb, string Route)> EndpointCalls = new();
         public List<StepBindingHolder> StepBindings { get; } = new();
     }
 

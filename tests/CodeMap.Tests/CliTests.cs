@@ -60,7 +60,7 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
     {
         var (code, stdout) = Capture(() => Commands.RunStats(new[] { _fx.DbPath }));
         Assert.Equal(ExitCode.Success, code);
-        Assert.Contains("2 project(s), 16 class(es), 11 method(s)", stdout);
+        Assert.Contains("2 project(s), 17 class(es), 13 method(s)", stdout);
         Assert.Contains("Fixture.SpecFlow", stdout);
         Assert.Contains("structural edges: 1 inherits, 1 uses_type", stdout);
     }
@@ -117,6 +117,19 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
         Assert.Contains("Impact of class LoginPage", stdout);
         Assert.Contains("Successful sign in", stdout);
         Assert.Contains("they sign in", stdout);
+    }
+
+    [Fact]
+    public void Impact_of_an_endpoint_lists_scenarios_from_both_projects()
+    {
+        // "/api/orders" is called from CheckoutSteps step methods; the SpecFlow "Cross project step"
+        // scenario binds one of them cross-project, so the blast radius spans both projects.
+        var (code, stdout) = Capture(() => Commands.RunImpact(new[] { _fx.DbPath, "--endpoint", "/api/orders" }));
+        Assert.Equal(ExitCode.Success, code);
+        Assert.Contains("endpoint matching \"/api/orders\"", stdout);
+        Assert.Contains("POST /api/orders", stdout);
+        Assert.Contains("Place an order", stdout);
+        Assert.Contains("Cross project step", stdout);
     }
 
     [Fact]
