@@ -1,0 +1,25 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- End-to-end suite: exercises BOTH the API clients and the page objects in one journey. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Reqnroll.xUnit" Version="2.1.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="Selenium.WebDriver" Version="4.27.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SampleShop.Api.Catalog\SampleShop.Api.Catalog.csproj" />
+    <ProjectReference Include="..\SampleShop.Api.Cart\SampleShop.Api.Cart.csproj" />
+    <ProjectReference Include="..\SampleShop.Api.Identity\SampleShop.Api.Identity.csproj" />
+    <ProjectReference Include="..\SampleShop.Ui.Pages\SampleShop.Ui.Pages.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
-  <!-- API layer: typed clients over the shop's REST API. Depends on Core. -->
+  <!-- API area: catalogue (products, categories). Depends on Core. -->
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>

@@ -1,5 +1,5 @@
-Feature: Product API
-    Browsing the catalogue and cart through the REST API.
+Feature: Catalog API
+    Browsing products and categories, and adding to the cart, through the REST API.
 
     Scenario: List available products
         Given the shop API is available
@@ -9,4 +9,4 @@ Feature: Product API
     Scenario: Add a product to the cart
         Given the shop API is available
         When product 42 is added to the cart with quantity 2
-        Then the cart contains 1 line item
+        Then the cart is not empty

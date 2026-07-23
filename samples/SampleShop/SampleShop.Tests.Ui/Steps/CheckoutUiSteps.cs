@@ -1,13 +1,15 @@
+using OpenQA.Selenium;
 using Reqnroll;
-using SampleShop.PageObjects;
+using SampleShop.Ui.Pages;
 
-namespace SampleShop.Tests.Steps
+namespace SampleShop.Tests.Ui.Steps
 {
-    /// <summary>UI-facing steps — bind to the PageObjects project (page-object mapping).</summary>
+    /// <summary>UI steps — drive the page objects in the Ui.Pages project.</summary>
     [Binding]
-    public class CheckoutSteps
+    public class CheckoutUiSteps
     {
-        private const string BaseUrl = "https://www.sampleshop.test";
+        // A real suite would resolve a live driver; the sample never launches a browser.
+        private readonly IWebDriver _driver = null;
 
         private LoginPage _loginPage;
         private CheckoutPage _checkoutPage;
@@ -15,7 +17,7 @@ namespace SampleShop.Tests.Steps
         [Given("the customer \"(.*)\" is signed in")]
         public void GivenTheCustomerIsSignedIn(string email)
         {
-            _loginPage = new LoginPage(BaseUrl);
+            _loginPage = new LoginPage(_driver);
             _loginPage.Open();
             _loginPage.LoginAs(email, "correct-horse-battery-staple");
         }
@@ -23,16 +25,13 @@ namespace SampleShop.Tests.Steps
         [When("they check out with shipping address \"(.*)\"")]
         public void WhenTheyCheckOutWithShippingAddress(string address)
         {
-            _checkoutPage = new CheckoutPage(BaseUrl);
+            _checkoutPage = new CheckoutPage(_driver);
             _checkoutPage.Open();
             _checkoutPage.EnterShippingAddress(address);
             _checkoutPage.PlaceOrder();
         }
 
         [Then("the order is placed")]
-        public void ThenTheOrderIsPlaced()
-        {
-            // Placeholder assertion — the sample has no real backend.
-        }
+        public void ThenTheOrderIsPlaced() { }
     }
 }

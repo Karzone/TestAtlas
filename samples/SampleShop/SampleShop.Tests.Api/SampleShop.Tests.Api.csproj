@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- API test suite: Reqnroll features + steps that drive the API clients. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Reqnroll.xUnit" Version="2.1.0" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\SampleShop.Api.Catalog\SampleShop.Api.Catalog.csproj" />
+    <ProjectReference Include="..\SampleShop.Api.Cart\SampleShop.Api.Cart.csproj" />
+    <ProjectReference Include="..\SampleShop.Api.Identity\SampleShop.Api.Identity.csproj" />
+  </ItemGroup>
+
+</Project>

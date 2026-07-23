@@ -1,4 +1,4 @@
-Feature: Checkout
+Feature: Checkout UI
     Signing in and placing an order through the web UI.
 
     Scenario: Place an order as a signed-in customer
