@@ -30,6 +30,7 @@ public sealed record ClassFacts(
     int ApiReferencingMembers,     // methods referencing a RestSharp/HttpClient type
     bool ReferencesUiType,
     bool ReferencesApiType,
+    bool HoldsOrConstructsApiMarker = false, // holds/constructs a RestSharp/HttpClient marker type
     IReadOnlyList<string>? ConstructedTypeNames = null); // simple names of `new X()` in the class body
 
 /// <summary>Per-method signals for method-kind classification.</summary>
@@ -74,6 +75,8 @@ public static class Classifier
             //    walks the service layer that hides HTTP behind a typed request (BaseRequest →
             //    BaseApiService → *ApiService); it needs the inherits/uses fixpoint to converge.
             if (f.MethodCount > 0 && f.ApiReferencingMembers * 2 >= f.MethodCount)
+                return Kinds.ApiClient;
+            if (f.HoldsOrConstructsApiMarker)
                 return Kinds.ApiClient;
             if (NameHasSuffix(f.Name, opts.ApiClientSuffixes) && f.ReferencesApiType)
                 return Kinds.ApiClient;

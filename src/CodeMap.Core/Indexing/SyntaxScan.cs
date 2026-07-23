@@ -101,6 +101,21 @@ internal static class SyntaxScan
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
+        // Directly holding OR constructing a RestSharp/HttpClient marker type is the strongest
+        // api_client signal — and, unlike the method-ratio rule, it survives the real-world shape
+        // where the client lives in a FIELD (e.g. `IRestClient _client`) driven through a variable,
+        // so the marker's type name never appears in a method BODY. Fields/props + `new X()` count.
+        var holdsOrConstructsApiMarker = constructed.Any(ApiTypes.Contains) || type.Members.Any(m =>
+        {
+            var t = m switch
+            {
+                FieldDeclarationSyntax f => f.Declaration.Type,
+                PropertyDeclarationSyntax p => p.Type,
+                _ => (TypeSyntax?)null,
+            };
+            return t is not null && TypeIdentifiers(t).Any(ApiTypes.Contains);
+        });
+
         return new ClassFacts(
             Name: type.Identifier.ValueText,
             BaseTypeName: SimpleBaseName(type.BaseList?.Types.FirstOrDefault()?.Type),
@@ -115,6 +130,7 @@ internal static class SyntaxScan
             ApiReferencingMembers: apiMethodRefs,
             ReferencesUiType: referencesUi,
             ReferencesApiType: referencesApi,
+            HoldsOrConstructsApiMarker: holdsOrConstructsApiMarker,
             ConstructedTypeNames: constructed);
     }
 

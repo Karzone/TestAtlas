@@ -57,6 +57,25 @@ public sealed class ClassifierTests
         => Assert.Equal(Kinds.StepClass, Classify(CF("UiSteps", binding: true, instMembers: 2, uiMembers: 2)));
 
     [Fact]
+    public void Holds_a_rest_client_marker_in_a_field_so_it_is_an_api_client()
+    {
+        // The real-world shape: an HTTP wrapper whose client lives in a field and is driven through a
+        // variable — the marker type name never appears in a method body, so the method-ratio rule
+        // sees 0 api-referencing methods. It must still classify api_client on the holds/constructs
+        // signal, else `new Wrapper<Req>()` never registers as an operation-level endpoint.
+        var facts = new ClassFacts("BaseRequest", BaseTypeName: null, HasBindingAttribute: false,
+            HasTestClassAttribute: false, MethodCount: 3, StepMethodCount: 0, TestMethodCount: 0,
+            HookMethodCount: 0, InstanceMemberCount: 3, UiReferencingMembers: 0, ApiReferencingMembers: 0,
+            ReferencesUiType: false, ReferencesApiType: true, HoldsOrConstructsApiMarker: true);
+        Assert.Equal(Kinds.ApiClient, Classify(facts));
+
+        // Vacuity: merely *referencing* an api type in one method (without holding/constructing one and
+        // without a majority) is NOT enough — the holds signal is what tips it.
+        var notHolding = facts with { HoldsOrConstructsApiMarker = false };
+        Assert.Equal(Kinds.Other, Classify(notHolding));
+    }
+
+    [Fact]
     public void Wraps_an_api_client_by_constructing_one()
     {
         // The service-layer propagation: a class that constructs an already-classified api_client

@@ -7,13 +7,16 @@ namespace Fixture.Reqnroll
     // operation identity. `new BaseRequest<GetSupplierRequest>()` in a step is therefore an
     // operation-level endpoint (slice 4) — verb inferred from the request name ("Get…" → GET), route
     // = the request type name (a bare identity, no URL at the call site). Method count 1.
+    //
+    // Note the realistic shape (matches 1FrameworkAutomatedTest's BaseRequest): the HTTP client lives
+    // in a FIELD and is driven through the variable — the marker type name never appears in a method
+    // BODY, so the method-ratio api_client rule alone would MISS it. It's caught because a class that
+    // holds a RestSharp/HttpClient marker is an api_client. (1FAT holds an IRestClient here.)
     public class BaseRequest<T>
     {
-        public string Execute()
-        {
-            var client = new HttpClient();   // references HttpClient → seeds this wrapper as api_client
-            return client.ToString();
-        }
+        private readonly HttpClient _client = new HttpClient();
+
+        public string Execute() => _client.ToString();
     }
 
     // The typed request that names the operation. Plain data, classified `other`; its NAME is what the

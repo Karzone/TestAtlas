@@ -188,10 +188,15 @@ method with a step attribute.
 
 1. ≥ 50% of methods construct/execute `RestRequest`/`RestClient` or call `HttpClient`
    send methods;
-2. name matches suffix list (default: `Client`, `Api`, `Service`, `Endpoint`) **and**
+2. **holds or constructs** a RestSharp/HttpClient marker type (a field/property of, or a `new`,
+   `RestClient`/`IRestClient`/`RestRequest`/`IRestRequest`/`HttpClient`). This survives the real-world
+   shape where the client lives in a **field** driven through a variable, so the marker type name
+   never appears in a method *body* — the case rule 1 misses (the 1FAT `BaseRequest` holds an
+   `IRestClient`);
+3. name matches suffix list (default: `Client`, `Api`, `Service`, `Endpoint`) **and**
    references RestSharp/HttpClient;
-3. inherits from a classified API client;
-4. **constructs/wraps** a classified API client (`new <api_client>(…)` anywhere in the class body).
+4. inherits from a classified API client;
+5. **constructs/wraps** a classified API client (`new <api_client>(…)` anywhere in the class body).
 
 Rules 3–4 propagate `api_client`-ness through the service layer to a fixpoint, so a chain like
 `BaseRequest` (executes RestSharp) → `BaseApiService` (constructs `BaseRequest`) → `*ApiService`
