@@ -112,7 +112,7 @@ public sealed class ProjectMapBuilderTests
         // panel can expand "Feature.A → Lib.B" into "BSteps · 1 binds_to".
         Assert.Contains("\"cls\":[{\"c\":\"BSteps\",\"k\":\"binds_to\",\"w\":1}]", html);
         Assert.Contains("toggleExp", html);
-        Assert.Contains("Show the classes behind this", html);
+        Assert.Contains("class'+(cls.length===1?'':'es')", html); // the visible "N class(es)" expander label
 
         // Regression: the pointer must be captured only once a drag MOVES (via down.id), NOT on
         // pointerdown — capturing on pointerdown retargets the click to the <svg> so node clicks never

@@ -360,15 +360,16 @@ public static class ProjectMapBuilder
         .p-kind{color:var(--faint);font-size:12px;margin-bottom:14px}
         .p-sec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--faint);font-weight:600;
         margin:14px 0 6px}
-        .pi-wrap{border-radius:8px}
-        .p-item{display:flex;align-items:stretch;gap:2px}
-        .pi-main{flex:1;min-width:0;text-align:left;border:0;background:none;cursor:pointer;padding:7px 8px;
+        .pi-wrap{border-radius:8px;margin-bottom:2px}
+        .pi-main{display:block;width:100%;text-align:left;border:0;background:none;cursor:pointer;padding:7px 8px;
         border-radius:8px;color:var(--ink);font:inherit}
         .pi-main:hover{background:color-mix(in srgb,var(--bdd) 12%,transparent)}
         .pi-name{font-weight:500;display:block;word-break:break-word}
         .pi-detail{display:block;color:var(--faint);font-size:11.5px;font-family:var(--mono);margin-top:1px}
-        .pi-exp{flex:none;width:26px;border:0;background:none;color:var(--faint);cursor:pointer;font-size:11px;border-radius:8px}
-        .pi-exp:hover{background:color-mix(in srgb,var(--bdd) 12%,transparent);color:var(--ink)}
+        .pi-exp{margin:1px 0 5px 8px;border:1px solid var(--line);border-radius:20px;padding:3px 10px;background:var(--bg);
+        color:var(--dim);font:inherit;font-size:11px;cursor:pointer}
+        .pi-exp:hover{border-color:var(--bdd);color:var(--bdd)}
+        .pi-exp .cv{font-family:var(--mono);margin-right:3px}
         .pi-classes{padding:2px 8px 8px 18px}
         .pi-class{display:flex;justify-content:space-between;gap:10px;padding:4px 0;font-size:12px;border-top:1px solid var(--line)}
         .pi-cname{color:var(--ink);word-break:break-word}
@@ -411,17 +412,17 @@ public static class ProjectMapBuilder
               var oid=l[key], nm=(DATA.n[oid]||{}).name||('#'+oid), cls=l.cls||[];
               var main='<button class="pi-main" onclick="pin('+oid+')"><span class="pi-name">'+esc(nm)
                 +'</span><span class="pi-detail">'+esc(l.d)+'</span></button>';
-              var exp=cls.length? '<button class="pi-exp" onclick="toggleExp(this)" title="Show the classes behind this" aria-label="Expand classes">▸</button>':'';
+              var exp=cls.length? '<button class="pi-exp" onclick="toggleExp(this)" title="Expand to the classes behind this dependency"><span class="cv">▸</span>'+cls.length+' class'+(cls.length===1?'':'es')+'</button>':'';
               var body=cls.length? '<div class="pi-classes" hidden>'+cls.map(function(c){
                 return '<div class="pi-class"><span class="pi-cname">'+esc(c.c)+'</span><span class="pi-cmeta">'+c.w+' '+esc(c.k)+'</span></div>';
               }).join('')+'</div>' : '';
-              return '<div class="pi-wrap"><div class="p-item">'+main+exp+'</div>'+body+'</div>';
+              return '<div class="pi-wrap">'+main+exp+body+'</div>';
             }).join('');
           }
           window.toggleExp=function(btn){
-            var wrap=btn.closest('.pi-wrap'), body=wrap.querySelector('.pi-classes');
-            if(body.hasAttribute('hidden')){body.removeAttribute('hidden');btn.textContent='▾';}
-            else{body.setAttribute('hidden','');btn.textContent='▸';}
+            var wrap=btn.closest('.pi-wrap'), body=wrap.querySelector('.pi-classes'), cv=btn.querySelector('.cv');
+            if(body.hasAttribute('hidden')){body.removeAttribute('hidden'); if(cv)cv.textContent='▾';}
+            else{body.setAttribute('hidden',''); if(cv)cv.textContent='▸';}
           };
           function openPanel(id){
             var m=DATA.n[id]; if(!m) return;
