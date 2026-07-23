@@ -87,5 +87,17 @@ dotnet run --project src/CodeMap.Cli -- map reqdemo.db --html reqdemo-map.html
 directed edge A→B means project A binds to / uses / inherits something in project B. Hover a node to
 isolate its links; drag to pan, scroll to zoom.
 
+### Impact (blast radius)
+
+```bash
+dotnet run --project src/CodeMap.Cli -- impact reqdemo.db --class LoginPage
+dotnet run --project src/CodeMap.Cli -- impact reqdemo.db --step "user logs in"
+```
+
+`testatlas impact` answers *"if I change this, which test scenarios could break?"* — it walks the
+`binds_to` / `uses_type` / `inherits` edges backwards from a page object / API client / step class /
+step definition to the affected scenarios and features. Great before a refactor or when a step /
+page object is flaky.
+
 > The same commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.

@@ -108,6 +108,25 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
     }
 
     [Fact]
+    public void Impact_of_a_page_object_lists_the_affected_scenario()
+    {
+        // LoginPage is used by LoginSteps.WhenTheySignIn ("they sign in"), which the "Successful sign
+        // in" scenario binds — so changing LoginPage impacts that scenario.
+        var (code, stdout) = Capture(() => Commands.RunImpact(new[] { _fx.DbPath, "--class", "LoginPage" }));
+        Assert.Equal(ExitCode.Success, code);
+        Assert.Contains("Impact of class LoginPage", stdout);
+        Assert.Contains("Successful sign in", stdout);
+        Assert.Contains("they sign in", stdout);
+    }
+
+    [Fact]
+    public void Impact_without_a_target_is_bad_args()
+    {
+        var (code, _) = Capture(() => Commands.RunImpact(new[] { _fx.DbPath }));
+        Assert.Equal(ExitCode.BadArgs, code);
+    }
+
+    [Fact]
     public void Map_missing_db_is_bad_args()
     {
         var (code, _) = Capture(() => Commands.RunMap(new[] { "/no/such/map.db" }));

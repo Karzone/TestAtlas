@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using TestAtlas.Cli;
+using TestAtlas.Core.Analysis;
 using TestAtlas.Core.Indexing;
 using TestAtlas.Core.Model;
 using TestAtlas.Core.Reporting;
@@ -24,6 +25,7 @@ return command switch
     "validate" => Commands.RunValidate(rest),
     "report" => Commands.RunReport(rest),
     "map" => Commands.RunMap(rest),
+    "impact" => Commands.RunImpact(rest),
     "search" => Commands.RunSearch(rest),
     "-h" or "--help" or "help" => Ok(Commands.PrintUsage),
     _ => Fail($"Unknown command '{command}'.")
@@ -382,6 +384,61 @@ public static class Commands
         return ExitCode.Success;
     }
 
+    public static int RunImpact(string[] args)
+    {
+        var dbPath = args.FirstOrDefault(a => !a.StartsWith('-'))
+                     ?? Path.Combine(Directory.GetCurrentDirectory(), "codemap.db");
+        if (!File.Exists(dbPath))
+            return BadArgs($"map file not found: {dbPath}");
+
+        ImpactQuery? query = null;
+        if (OptionValue(args, "--class") is { } cls) query = new ImpactQuery(ImpactTargetKind.Class, cls);
+        else if (OptionValue(args, "--method") is { } method) query = new ImpactQuery(ImpactTargetKind.Method, method);
+        else if (OptionValue(args, "--step") is { } step) query = new ImpactQuery(ImpactTargetKind.Step, step);
+        if (query is null)
+            return BadArgs("specify a target: --class <Name> | --method <Name> | --step <expression-substring>");
+
+        MapDocument doc;
+        try { doc = MapReader.Read(dbPath); }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"error: could not read map '{dbPath}': {ex.Message}");
+            return ExitCode.Fatal;
+        }
+
+        var result = ImpactAnalyzer.Analyze(doc, query);
+        Console.WriteLine($"Impact of {result.TargetLabel}");
+        if (!result.Found || result.Scenarios.Count == 0)
+        {
+            Console.WriteLine("No affected scenarios found. (Check the name/expression; and note this reads " +
+                "binds_to / uses_type / inherits — a stale map may not have them.)");
+            WarnIfStaleSchema(doc.UserVersion);
+            return ExitCode.Success;
+        }
+
+        Console.WriteLine($"Affected: {result.StepDefinitionCount} step definition(s) · " +
+            $"{result.Scenarios.Count} scenario(s) · {result.FeatureCount} feature(s)");
+        Console.WriteLine();
+
+        const int cap = 200;
+        string? currentFeature = null;
+        foreach (var s in result.Scenarios.Take(cap))
+        {
+            if (s.Feature != currentFeature)
+            {
+                currentFeature = s.Feature;
+                Console.WriteLine($"{s.Feature}  ({s.FeatureFile})");
+            }
+            var via = string.Join(", ", s.Via.Select(v => $"\"{v}\""));
+            Console.WriteLine($"  {s.Scenario}   via {via}");
+        }
+        if (result.Scenarios.Count > cap)
+            Console.WriteLine($"  … and {result.Scenarios.Count - cap} more scenario(s)");
+
+        WarnIfStaleSchema(doc.UserVersion);
+        return ExitCode.Success;
+    }
+
     private static string? OptionValue(string[] args, string name)
     {
         var i = Array.IndexOf(args, name);
@@ -442,6 +499,8 @@ public static class Commands
                   --html <file>       output path (default <db>.html)
               testatlas map [<db>]        write a self-contained project dependency graph
                   --html <file>       output path (default <db>-map.html)
+              testatlas impact [<db>] --class <Name> | --method <Name> | --step <expr>
+                                          blast radius: scenarios affected by changing an entity
               testatlas search [<db>] <query>   FTS5 search over step definitions and scenarios
                   --steps             step definitions only
                   --scenarios         scenarios only

@@ -197,6 +197,11 @@ codemap report [<db>]      Writes a single self-contained HTML drill-down of the
 codemap map [<db>]         Writes a self-contained project dependency graph (SVG)
     --html <file>          Output path (default: <db>-map.html)
 
+codemap impact [<db>]      Blast radius: scenarios affected by changing an entity
+    --class <Name>         a page object / API client / step class
+    --method <Name>        a specific method
+    --step <expr-substr>   step definitions whose expression contains this
+
 codemap search [<db>] <query>   FTS5 search over step definitions and scenarios
     --steps                Step definitions only
     --scenarios            Scenarios only
@@ -207,6 +212,14 @@ codemap validate [<db>]    Checks file is a CodeMap db and schema version is sup
 `search` runs the query against both FTS5 indexes: `search_steps` (step-definition expression /
 method / class) and `search_scenarios` (feature / scenario / step text / tags), printing each hit
 resolved to its name and `file:line`. `--steps` / `--scenarios` narrows to one facet.
+
+`impact` is **reverse-dependency analysis** — the edges walked backwards to answer *"if I change this,
+which test scenarios could break?"*. From the changed entity it follows `inherits` and `uses_type`
+(transitively, through composed page objects) to the step-definition methods that reach it, then
+`binds_to` back to the scenario steps and their scenarios / features. Class granularity by design (a
+step is affected when its method reaches the changed class), with method-level precision so sibling
+step methods in the same class are not swept in. Needs no restored build. For finer "which page-object
+*method*" precision the deferred `calls` edge (semantic model) would be required.
 
 The `map` command is a companion visualization: a **project dependency graph**. A directed edge
 A→B ("A depends on B") is derived by aggregating the map's cross-project `binds_to` / `uses_type` /
