@@ -25,4 +25,18 @@ namespace Fixture.Reqnroll
     {
         public int SupplierId { get; set; }
     }
+
+    // A *consumer* of the API layer: it constructs the request wrapper directly to CALL the operation,
+    // exactly as 1FrameworkAutomatedTest's `NetworkUtilities` / `InvoiceUtilities` do. It is therefore
+    // NOT itself an api_client — composition of an api_client is usage, not identity. Its name lacks any
+    // API suffix (Api/Client/Service/Endpoint), so the name-gated constructs-an-api-client rule leaves
+    // it `other`. (Before that gate it mis-classified as api_client — the 40+ *Utilities false positives
+    // measured on the real solution.) The call is still real: it contributes a calls_endpoint edge.
+    public class PricingUtilities
+    {
+        public void RefreshSupplier()
+        {
+            _ = new BaseRequest<GetSupplierRequest>().Execute();
+        }
+    }
 }

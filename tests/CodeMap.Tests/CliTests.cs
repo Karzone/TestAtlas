@@ -60,10 +60,10 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
     {
         var (code, stdout) = Capture(() => Commands.RunStats(new[] { _fx.DbPath }));
         Assert.Equal(ExitCode.Success, code);
-        Assert.Contains("2 project(s), 19 class(es), 14 method(s)", stdout);
+        Assert.Contains("2 project(s), 20 class(es), 15 method(s)", stdout);
         Assert.Contains("Fixture.SpecFlow", stdout);
-        Assert.Contains("structural edges: 1 inherits, 2 uses_type", stdout);
-        Assert.Contains("endpoints: 3 (2 route(s), 1 operation(s); 3 call site(s))", stdout);
+        Assert.Contains("structural edges: 1 inherits, 3 uses_type", stdout);
+        Assert.Contains("endpoints: 3 (2 route(s), 1 operation(s); 4 call site(s))", stdout);
     }
 
     [Fact]

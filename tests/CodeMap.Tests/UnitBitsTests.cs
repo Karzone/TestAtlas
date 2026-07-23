@@ -78,10 +78,11 @@ public sealed class ClassifierTests
     [Fact]
     public void Wraps_an_api_client_by_constructing_one()
     {
-        // The service-layer propagation: a class that constructs an already-classified api_client
-        // (BaseApiService → `new BaseRequest<..>()`) is itself part of the API layer. It has no direct
-        // RestSharp/HttpClient reference and no api name-suffix, so ONLY the wraps-an-api-client rule
-        // can catch it — and only once the resolver knows BaseRequest's kind (i.e. after the fixpoint).
+        // The service-layer propagation: a NAMED wrapper that constructs an already-classified
+        // api_client (BaseApiService → `new BaseRequest<..>()`) is itself part of the API layer. It has
+        // no direct RestSharp/HttpClient reference, so only the constructs-an-api-client rule can catch
+        // it — and only once the resolver knows BaseRequest's kind (i.e. after the fixpoint). The rule is
+        // name-gated: "BaseApiService" carries the …Service suffix, so it qualifies.
         var facts = new ClassFacts("BaseApiService", BaseTypeName: null, HasBindingAttribute: false,
             HasTestClassAttribute: false, MethodCount: 1, StepMethodCount: 0, TestMethodCount: 0,
             HookMethodCount: 0, InstanceMemberCount: 0, UiReferencingMembers: 0, ApiReferencingMembers: 0,
@@ -89,6 +90,24 @@ public sealed class ClassifierTests
 
         Assert.Equal(Kinds.Other, Classifier.ClassifyClass(facts, ClassifierOptions.Default, _ => null));
         Assert.Equal(Kinds.ApiClient, Classifier.ClassifyClass(facts, ClassifierOptions.Default,
+            n => n == "BaseRequest" ? Kinds.ApiClient : null));
+    }
+
+    [Fact]
+    public void A_utility_that_constructs_an_api_client_but_is_not_named_like_one_stays_other()
+    {
+        // The precision guard on the constructs-an-api-client rule. A *Utilities/*Helper consumer that
+        // internally news up a request wrapper is calling the API, not being it — so with no transport
+        // marker, no inheritance and no API name-suffix it must classify `other`. Before the name gate
+        // this returned api_client (the 40+ *Utilities false positives on the real 28-project solution),
+        // so this assertion FAILS on the pre-gate classifier.
+        var facts = new ClassFacts("NetworkUtilities", BaseTypeName: null, HasBindingAttribute: false,
+            HasTestClassAttribute: false, MethodCount: 2, StepMethodCount: 0, TestMethodCount: 0,
+            HookMethodCount: 0, InstanceMemberCount: 0, UiReferencingMembers: 0, ApiReferencingMembers: 0,
+            ReferencesUiType: false, ReferencesApiType: false, ConstructedTypeNames: new[] { "BaseRequest" });
+
+        // Even with the resolver reporting BaseRequest as an api_client, the utility is not promoted.
+        Assert.Equal(Kinds.Other, Classifier.ClassifyClass(facts, ClassifierOptions.Default,
             n => n == "BaseRequest" ? Kinds.ApiClient : null));
     }
 

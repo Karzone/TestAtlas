@@ -22,8 +22,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     public void Yields_exact_project_class_method_counts()
     {
         Assert.Equal(2, _fx.Doc.Projects.Count);
-        Assert.Equal(19, _fx.Doc.Classes.Count);
-        Assert.Equal(14, _fx.Doc.Methods.Count);
+        Assert.Equal(20, _fx.Doc.Classes.Count);
+        Assert.Equal(15, _fx.Doc.Methods.Count);
         Assert.Empty(_fx.Doc.Diagnostics);
     }
 
@@ -42,8 +42,8 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
 
         Assert.Equal(10, ClassesIn(specflow).Count);
         Assert.Equal(8, MethodsIn(specflow).Count);
-        Assert.Equal(9, ClassesIn(reqnroll).Count);   // +BaseRequest<T>, +GetSupplierRequest
-        Assert.Equal(6, MethodsIn(reqnroll).Count);   // +BaseRequest.Execute
+        Assert.Equal(10, ClassesIn(reqnroll).Count);  // +BaseRequest<T>, +GetSupplierRequest, +PricingUtilities
+        Assert.Equal(7, MethodsIn(reqnroll).Count);   // +BaseRequest.Execute, +PricingUtilities.RefreshSupplier
     }
 
     [Fact]
@@ -291,8 +291,27 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
         // Exactly one of each. Vacuity: the many shim classes deriving from System.Attribute — an
         // external base outside the solution — must produce NO inherits edge.
         Assert.Equal(1, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.Inherits));
-        // WhenTheySignIn → LoginPage (page object), and GivenACartWith → BaseRequest (api_client wrapper).
-        Assert.Equal(2, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.UsesType));
+        // WhenTheySignIn → LoginPage (page object); GivenACartWith → BaseRequest and
+        // PricingUtilities.RefreshSupplier → BaseRequest (both construct the api_client wrapper).
+        Assert.Equal(3, _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.UsesType));
+    }
+
+    [Fact]
+    public void A_consumer_that_constructs_the_api_wrapper_is_not_itself_an_api_client()
+    {
+        // PricingUtilities does `new BaseRequest<GetSupplierRequest>()` — the same shape as the real
+        // solution's *Utilities classes. Composition of an api_client is usage, not identity, so it must
+        // stay `other` (before the name-gate it was mis-promoted to api_client). This test FAILS on the
+        // pre-gate classifier, which returned api_client here.
+        var utils = _fx.Doc.Classes.Single(c => c.Name == "PricingUtilities");
+        Assert.Equal(Kinds.Other, utils.Kind);
+
+        // …yet the call is still captured: its method reaches the GetSupplierRequest operation endpoint,
+        // so tightening precision on the class kind costs no endpoint coverage.
+        var refresh = _fx.Doc.Methods.Single(m => m.Name == "RefreshSupplier" && m.ClassId == utils.Id);
+        var op = _fx.Doc.Endpoints.Single(e => e.Route == "GetSupplierRequest");
+        Assert.Contains(_fx.Doc.Edges, e =>
+            e.EdgeKind == EdgeKinds.CallsEndpoint && e.FromId == refresh.Id && e.ToId == op.Id);
     }
 
     [Fact]

@@ -191,19 +191,29 @@ method with a step attribute.
 2. **holds or constructs** a RestSharp/HttpClient marker type (a field/property of, or a `new`,
    `RestClient`/`IRestClient`/`RestRequest`/`IRestRequest`/`HttpClient`). This survives the real-world
    shape where the client lives in a **field** driven through a variable, so the marker type name
-   never appears in a method *body* — the case rule 1 misses (the 1FAT `BaseRequest` holds an
-   `IRestClient`);
+   never appears in a method *body* — the case rule 1 misses (the 1FAT `BaseRequest<T>` holds a
+   concrete `RestClient restClient` field);
 3. name matches suffix list (default: `Client`, `Api`, `Service`, `Endpoint`) **and**
    references RestSharp/HttpClient;
 4. inherits from a classified API client;
-5. **constructs/wraps** a classified API client (`new <api_client>(…)` anywhere in the class body).
+5. is **named like an API client** (matches the suffix list) **and constructs/wraps** a classified API
+   client (`new <api_client>(…)` anywhere in the class body). The name gate is deliberate:
+   *composition alone is usage, not identity*. A `*Utilities`/`*Helper`/`*Resolver` that internally
+   does `new BaseRequest<T>()` to **call** an operation is a consumer of the API layer, not part of it —
+   exactly as a step class that constructs a page object is not a page object (page objects likewise
+   propagate only by inheritance, never composition). Without this gate, every utility that reached the
+   API layer was mis-promoted: on the real 28-project solution that inflated `api_client` from ~90
+   genuine clients to 139 — ~40 false positives, all `*Utilities`/`*Helper`/`*Values`/`*Resolver`.
 
-Rules 3–4 propagate `api_client`-ness through the service layer to a fixpoint, so a chain like
-`BaseRequest` (executes RestSharp) → `BaseApiService` (constructs `BaseRequest`) → `*ApiService`
-(inherits `BaseApiService`) is fully recognised — which is both what makes those services visible as
-`uses_type` targets for `impact --class`, and the gate that lets `new BaseRequest<Req>()` register as
-an operation-level endpoint (§5.1). Non-solution generic hosts (`List`, `Task`, …) never resolve to a
-kind, so they never propagate.
+Rules 4–5 propagate `api_client`-ness through the *named* service layer to a fixpoint, so a chain like
+`BaseRequest` (holds `RestClient`) → `BaseApiService` (constructs `BaseRequest`, named `…Service`) →
+`*ApiService` (inherits `BaseApiService`) is fully recognised — which is both what makes those services
+visible as `uses_type` targets for `impact --class`, and the gate that lets `new BaseRequest<Req>()`
+register as an operation-level endpoint (§5.1). Endpoint extraction keys only on the **wrapper** being an
+`api_client`, not the caller, so tightening rule 5's precision on the class kind costs **no** endpoint
+coverage — a utility that calls `new BaseRequest<Req>()` still registers the call site while itself
+staying `other`. Non-solution generic hosts (`List`, `Task`, …) never resolve to a kind, so they never
+propagate.
 
 **Test class** — carries NUnit/xUnit/MSTest test attributes (and is not a step class).
 
