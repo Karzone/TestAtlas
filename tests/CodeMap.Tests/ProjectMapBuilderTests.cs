@@ -106,6 +106,12 @@ public sealed class ProjectMapBuilderTests
         Assert.Contains("\"a\":1,\"b\":2,\"w\":1,\"d\":\"1 binds_to\"", html);
         Assert.Contains("Lib.B \\u003cb>", html);       // the < is <-escaped inside the <script> blob
         Assert.DoesNotContain("Lib.B <b>", html);       // never a raw tag that could break the script
+
+        // Regression: the pointer must be captured only once a drag MOVES (via down.id), NOT on
+        // pointerdown — capturing on pointerdown retargets the click to the <svg> so node clicks never
+        // reach pin() and the panel never opens (the real-click bug).
+        Assert.Contains("setPointerCapture(down.id)", html);
+        Assert.DoesNotContain("setPointerCapture(ev.pointerId)", html);
     }
 
     [Fact]

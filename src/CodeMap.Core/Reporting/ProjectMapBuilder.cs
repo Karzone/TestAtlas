@@ -391,8 +391,9 @@ public static class ProjectMapBuilder
             nd.addEventListener('click',function(ev){ ev.stopPropagation(); pin(id); });
           });
 
-          // pan + zoom via viewBox; a background click (no drag) clears the pin.
-          var vb={x:0,y:0,w:1000,h:1040}, drag=null, moved=false;
+          // pan + zoom via viewBox. IMPORTANT: capture the pointer only once a drag actually MOVES —
+          // capturing on pointerdown retargets the click to the <svg>, so node clicks never reach pin().
+          var vb={x:0,y:0,w:1000,h:1040}, down=null, wasDrag=false;
           function apply(){svg.setAttribute('viewBox',vb.x+' '+vb.y+' '+vb.w+' '+vb.h);}
           svg.addEventListener('wheel',function(ev){
             ev.preventDefault();
@@ -402,16 +403,22 @@ public static class ProjectMapBuilder
             k=Math.max(0.2, Math.min(6, k*(vb.w/1000)))/(vb.w/1000);
             vb.x=mx-(mx-vb.x)*k; vb.y=my-(my-vb.y)*k; vb.w*=k; vb.h*=k; apply();
           },{passive:false});
-          svg.addEventListener('pointerdown',function(ev){drag={x:ev.clientX,y:ev.clientY};moved=false;svg.classList.add('grabbing');svg.setPointerCapture(ev.pointerId);});
+          svg.addEventListener('pointerdown',function(ev){down={x:ev.clientX,y:ev.clientY,id:ev.pointerId};wasDrag=false;});
           svg.addEventListener('pointermove',function(ev){
-            if(!drag) return; var r=svg.getBoundingClientRect();
-            if(Math.abs(ev.clientX-drag.x)+Math.abs(ev.clientY-drag.y)>3) moved=true;
-            vb.x-=(ev.clientX-drag.x)/r.width*vb.w; vb.y-=(ev.clientY-drag.y)/r.height*vb.h;
-            drag.x=ev.clientX; drag.y=ev.clientY; apply();
+            if(!down) return;
+            var dx=ev.clientX-down.x, dy=ev.clientY-down.y;
+            if(!wasDrag){
+              if(Math.abs(dx)+Math.abs(dy)<=3) return;   // still a click, not a drag — don't capture
+              wasDrag=true; svg.classList.add('grabbing'); try{svg.setPointerCapture(down.id);}catch(e){}
+            }
+            var r=svg.getBoundingClientRect();
+            vb.x-=dx/r.width*vb.w; vb.y-=dy/r.height*vb.h;
+            down.x=ev.clientX; down.y=ev.clientY; apply();
           });
-          function end(){drag=null;svg.classList.remove('grabbing');}
+          function end(){down=null;svg.classList.remove('grabbing');}
           svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
-          svg.addEventListener('click',function(ev){ if(!moved && !ev.target.closest('.node')) unpin(); });
+          // background click (not a node, not the tail of a drag) clears the pin.
+          svg.addEventListener('click',function(ev){ if(!wasDrag && !ev.target.closest('.node')) unpin(); wasDrag=false; });
         })();
         function toggleHeader(){
           var t=document.getElementById('top'); t.classList.toggle('collapsed');
