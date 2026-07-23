@@ -538,7 +538,7 @@ public sealed class SolutionIndexer
                         LineStart = tree.GetLineSpan(method.Identifier.Span).StartLinePosition.Line + 1,
                         LineEnd = tree.GetLineSpan(method.Span).EndLinePosition.Line + 1,
                         UsedTypeNames = SyntaxScan.UsedTypeNames(method, type),
-                        EndpointCalls = SyntaxScan.EndpointCalls(method),
+                        EndpointCalls = SyntaxScan.EndpointCalls(method, type),
                     };
 
                     var parameters = string.Join(", ", method.ParameterList.Parameters

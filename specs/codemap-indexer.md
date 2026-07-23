@@ -100,10 +100,15 @@ and line locations.
   `POST /api/orders/{id}`), deduplicated solution-wide on (verb, route). Extracted **syntactically**
   and solution-agnostically via a ladder: known client shapes (`HttpClient`'s `GetAsync`/
   `PostAsJsonAsync`/…, `new HttpRequestMessage(HttpMethod.X, …)`, RestSharp's `new RestRequest(…,
-  Method.X)`, Refit-style `[Get("…")]` attributes) plus a **generic fallback** for custom wrappers
-  (any invocation named with a verb word — `Get/Post/Put/Patch/Delete` — passing a strictly
-  route-like literal: starts with `/`, or contains `://` or `/{`). Interpolated strings become
-  templates (`$"/o/{id}"` → `/o/{id}`); fully dynamic URLs degrade to nothing, never an error.
+  Method.X)` / `Resource = "…"` assignments, Refit-style `[Get("…")]` attributes), a
+  **verb-as-argument** tier (any invocation passing `HttpMethod.X` / `Method.X` alongside a
+  route-like string — central client wrappers like `ExecuteAsync(HttpMethod.Get, "/x")`), and a
+  **generic fallback** for custom wrappers (an invocation named with a verb word —
+  `Get/Post/Put/Patch/Delete` — passing a strictly route-like literal: starts with `/`, or contains
+  `://` or `/{`). Route arguments may be literals, interpolated strings (holes → `{expr}` template),
+  or `const` / `static readonly` string fields of the containing class. **XPath-shaped strings are
+  rejected** (leading `//`, `text()`-style calls, `/ns:element` segments) — they are selectors, not
+  routes. Fully dynamic URLs degrade to nothing, never an error.
 
 ### 5.2 Edges
 

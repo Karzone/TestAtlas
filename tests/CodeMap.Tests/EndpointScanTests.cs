@@ -12,11 +12,12 @@ namespace TestAtlas.Tests;
 /// </summary>
 public sealed class EndpointScanTests
 {
-    private static List<(string Verb, string Route)> Scan(string methodBody, string attrs = "")
+    private static List<(string Verb, string Route)> Scan(string methodBody, string attrs = "", string members = "")
     {
         var src = $$"""
             class C
             {
+                {{members}}
                 {{attrs}}
                 void M()
                 {
@@ -26,7 +27,8 @@ public sealed class EndpointScanTests
             """;
         var root = CSharpSyntaxTree.ParseText(src).GetRoot();
         var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
-        return SyntaxScan.EndpointCalls(method);
+        var type = root.DescendantNodes().OfType<ClassDeclarationSyntax>().Single();
+        return SyntaxScan.EndpointCalls(method, type);
     }
 
     [Theory]
@@ -40,7 +42,13 @@ public sealed class EndpointScanTests
     // Tier 3 — RestSharp.
     [InlineData("""var r = new RestRequest("/api/suppliers", Method.Post);""", "POST", "/api/suppliers")]
     [InlineData("""var r = new RestRequest("/api/suppliers");""", "GET", "/api/suppliers")]
-    // Tier 5 — generic custom-wrapper fallback (strictly route-like arg).
+    // Tier 5 — verb-as-argument (central client wrappers with non-verb method names).
+    [InlineData("""client.ExecuteAsync(HttpMethod.Get, "/api/orders");""", "GET", "/api/orders")]
+    [InlineData("""api.CallApi("/api/suppliers", Method.POST, body);""", "POST", "/api/suppliers")]
+    [InlineData("""SendRequest(HttpMethod.Delete, $"/api/orders/{id}");""", "DELETE", "/api/orders/{id}")]
+    // Tier 3b — RestSharp property style (verb unknowable here → ANY).
+    [InlineData("""request.Resource = "/api/margins";""", "ANY", "/api/margins")]
+    // Tier 6 — generic custom-wrapper fallback (strictly route-like arg).
     [InlineData("""Api.Get("/partners/list");""", "GET", "/partners/list")]
     [InlineData("""executor.PostJson("/api/estimate", body);""", "POST", "/api/estimate")]
     public void Extracts_the_verb_and_route(string body, string verb, string route)
@@ -73,8 +81,29 @@ public sealed class EndpointScanTests
     [InlineData("""files.GetFiles("*.feature");""")]                // glob, no '/'
     [InlineData("""wrapper.Get("a/b");""")]                         // generic tier requires leading '/' etc.
     [InlineData("""log.Delete(records);""")]                        // no string arg
+    // XPath selectors are NOT routes (the real-world false positives from a SOAP-testing suite).
+    [InlineData("""xml.Get("//myc:changeContractStatus/note");""")]
+    [InlineData("""doc.Get("/soapenv:Envelope/soapenv:Body/myc:assign/contractId/text()");""")]
     public void Ignores_non_route_calls(string body)
         => Assert.Empty(Scan(body));
+
+    [Fact]
+    public void Route_held_in_a_class_constant_is_resolved()
+    {
+        var calls = Scan(
+            """_http.GetAsync(OrdersRoute);""",
+            members: """private const string OrdersRoute = "/api/orders";""");
+        Assert.Equal(("GET", "/api/orders"), Assert.Single(calls));
+    }
+
+    [Fact]
+    public void Route_held_in_a_static_readonly_field_is_resolved()
+    {
+        var calls = Scan(
+            """client.Execute(Method.PUT, SupplierRoute);""",
+            members: """private static readonly string SupplierRoute = "/api/suppliers/{id}";""");
+        Assert.Equal(("PUT", "/api/suppliers/{id}"), Assert.Single(calls));
+    }
 
     [Fact]
     public void A_method_with_multiple_calls_yields_all_of_them()
