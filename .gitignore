@@ -9,8 +9,11 @@ obj/
 
 # Test / tool artifacts
 *.db
+*.nupkg
+artifacts-nupkg/
 TestResults/
 [Tt]est[Rr]esults/
+*.html
 
 # OS
 .DS_Store
