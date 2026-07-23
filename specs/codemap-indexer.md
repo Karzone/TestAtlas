@@ -194,7 +194,9 @@ script, font, or network request, so it opens offline straight from disk. Sectio
 counts, step-binding **coverage** (bound / ambiguous / unbound), class-kind breakdown,
 per-project table, a feature → scenario → step drill-down where each step is tagged with its
 resolved step definition (or the honest "no matching step definition" for `unbound`), and a
-diagnostics table. All map-derived text is HTML-escaped. Deterministic: the only volatile value
+diagnostics table, and a **collaborators** panel (page objects / API clients ranked by how many
+distinct methods drive them via `uses_type`, with the base class from `inherits` and an **unused**
+flag on orphans nothing drives). All map-derived text is HTML-escaped. Deterministic: the only volatile value
 (the generated timestamp) is read from the map, not the clock. When the map's `user_version`
 predates the current schema, the report shows a **stale-schema banner** (and `report`/`search`
 print a matching console note) explaining that facets like Gherkin features / coverage / search are

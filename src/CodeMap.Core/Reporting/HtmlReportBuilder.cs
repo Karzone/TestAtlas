@@ -144,6 +144,9 @@ public static class HtmlReportBuilder
         }
         sb.Append("</tbody></table></section>");
 
+        // ---- collaborators (page objects / API clients + who drives them) -------------------
+        AppendCollaborators(sb, doc);
+
         // ---- feature / scenario / step drill-down -------------------------------------------
         if (doc.Features.Count > 0)
         {
@@ -267,6 +270,69 @@ public static class HtmlReportBuilder
         };
     }
 
+    // ---- collaborators panel -----------------------------------------------------------------
+    private const int MaxCollaboratorRows = 60;
+
+    /// <summary>
+    /// The page objects / API clients the suite is built on, ranked by how many distinct methods
+    /// drive them (incoming <c>uses_type</c> edges). Surfaces the leaned-on classes and, just as
+    /// usefully, the <b>orphans</b> nothing in the map drives — candidate dead code.
+    /// </summary>
+    private static void AppendCollaborators(StringBuilder sb, MapDocument doc)
+    {
+        var collaborators = doc.Classes.Where(c => c.Kind is Kinds.PageObject or Kinds.ApiClient).ToList();
+        if (collaborators.Count == 0) return;
+
+        var driversByClass = doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.UsesType && e.ToId is int)
+            .GroupBy(e => e.ToId!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.FromId).Distinct().Count());
+
+        var classNameById = doc.Classes.ToDictionary(c => c.Id, c => c.Name);
+        var extendsByClass = doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.Inherits && e.ToId is int t && classNameById.ContainsKey(t))
+            .GroupBy(e => e.FromId)
+            .ToDictionary(g => g.Key, g => g.Select(e => classNameById[e.ToId!.Value]).OrderBy(n => n, StringComparer.Ordinal).ToList());
+
+        var pageObjects = collaborators.Count(c => c.Kind == Kinds.PageObject);
+        var apiClients = collaborators.Count(c => c.Kind == Kinds.ApiClient);
+        var orphans = collaborators.Count(c => !driversByClass.ContainsKey(c.Id));
+
+        var ranked = collaborators
+            .Select(c => (Class: c, Drivers: driversByClass.TryGetValue(c.Id, out var d) ? d : 0))
+            .OrderByDescending(x => x.Drivers)
+            .ThenBy(x => x.Class.Name, StringComparer.Ordinal)
+            .ToList();
+
+        sb.Append("<section class=\"panel\"><div class=\"panel-head\"><h2>Collaborators</h2>");
+        sb.Append("<span class=\"subtle\">").Append(pageObjects).Append(" page object").Append(pageObjects == 1 ? "" : "s");
+        if (apiClients > 0) sb.Append(" · ").Append(apiClients).Append(" API client").Append(apiClients == 1 ? "" : "s");
+        if (orphans > 0) sb.Append(" · <span class=\"warn-text\">").Append(orphans).Append(" unused</span>");
+        sb.Append("</span></div>");
+
+        sb.Append("<table class=\"grid\"><thead><tr>");
+        foreach (var h in new[] { "collaborator", "kind", "driven by", "extends" })
+            sb.Append("<th>").Append(h).Append("</th>");
+        sb.Append("</tr></thead><tbody>");
+
+        foreach (var (c, drivers) in ranked.Take(MaxCollaboratorRows))
+        {
+            sb.Append("<tr><td class=\"name\">").Append(E(c.Name)).Append("</td>");
+            sb.Append("<td><span class=\"chip\">").Append(E(c.Kind)).Append("</span></td>");
+            if (drivers == 0)
+                sb.Append("<td><span class=\"tag-unused\">unused</span></td>");
+            else
+                sb.Append("<td class=\"num\">").Append(drivers).Append(" method").Append(drivers == 1 ? "" : "s").Append("</td>");
+            var bases = extendsByClass.TryGetValue(c.Id, out var b) ? string.Join(", ", b) : "";
+            sb.Append("<td class=\"mono dim\">").Append(E(bases)).Append("</td></tr>");
+        }
+        sb.Append("</tbody></table>");
+        if (ranked.Count > MaxCollaboratorRows)
+            sb.Append("<p class=\"subtle more\">… and ").Append(ranked.Count - MaxCollaboratorRows)
+              .Append(" more (query the map db for the full list).</p>");
+        sb.Append("</section>");
+    }
+
     // ---- small emit helpers ------------------------------------------------------------------
     private static void Card(StringBuilder sb, int value, string label)
         => sb.Append("<div class=\"card\"><div class=\"c-num\">").Append(value)
@@ -347,6 +413,12 @@ public static class HtmlReportBuilder
         .chip{display:inline-block;font-size:11.5px;font-family:var(--mono);color:var(--dim);background:var(--bg);
         border:1px solid var(--line);border-radius:20px;padding:1px 9px}
         .chip.outline{color:var(--amber);border-color:var(--amber)}
+        .subtle{color:var(--faint);font-size:12.5px}
+        .warn-text{color:var(--amber);font-weight:600}
+        .more{margin:10px 0 0}
+        .tag-unused{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--amber);
+        background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid var(--amber);
+        border-radius:20px;padding:1px 9px}
         details.feature{border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden;background:var(--bg)}
         details.feature>summary{cursor:pointer;list-style:none;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
         background:var(--card)}

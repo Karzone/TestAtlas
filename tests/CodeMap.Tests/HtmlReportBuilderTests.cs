@@ -109,6 +109,52 @@ public sealed class HtmlReportBuilderTests
         Assert.DoesNotContain("class=\"banner\"", html);
     }
 
+    // A doc with page objects and structural edges: LoginPage is driven by a step method and extends
+    // BasePage; BasePage and DeadPage are page objects nothing drives (orphans).
+    private static MapDocument DocWithCollaborators() => new()
+    {
+        UserVersion = MapSchema.Version,
+        Classes = new[]
+        {
+            new ClassRow(1, 1, "LoginSteps", "N", null, Kinds.StepClass, "S.cs", 1, 9),
+            new ClassRow(2, 1, "LoginPage", "N", "BasePage", Kinds.PageObject, "P.cs", 1, 9),
+            new ClassRow(3, 1, "BasePage", "N", null, Kinds.PageObject, "B.cs", 1, 9),
+            new ClassRow(4, 1, "DeadPage", "N", null, Kinds.PageObject, "D.cs", 1, 9),
+        },
+        Methods = new[] { new MethodRow(1, 1, 1, "WhenTheySignIn", "WhenTheySignIn()", "public", Kinds.StepDefinitionMethod, "S.cs", 3, 3) },
+        Edges = new[]
+        {
+            new EdgeRow(RefKinds.Method, 1, RefKinds.Class, 2, EdgeKinds.UsesType, BindConfidence.Exact),
+            new EdgeRow(RefKinds.Class, 2, RefKinds.Class, 3, EdgeKinds.Inherits, BindConfidence.Exact),
+        },
+    };
+
+    [Fact]
+    public void Collaborators_panel_ranks_drivers_and_flags_orphans()
+    {
+        var html = HtmlReportBuilder.Build(DocWithCollaborators());
+
+        Assert.Contains("Collaborators", html);
+        Assert.Contains("3 page objects", html);
+        Assert.Contains("2 unused", html);            // BasePage + DeadPage are driven by nothing
+
+        // The driven page object shows its driver count and its base (inherits).
+        Assert.Contains("LoginPage", html);
+        Assert.Contains("1 method", html);
+        Assert.Contains("BasePage", html);            // rendered in LoginPage's "extends" cell
+
+        // An orphan is explicitly tagged unused.
+        Assert.Contains("tag-unused", html);
+        Assert.Contains("DeadPage", html);
+    }
+
+    [Fact]
+    public void No_collaborators_panel_when_there_are_no_page_objects_or_api_clients() // vacuity guard
+    {
+        var html = HtmlReportBuilder.Build(Doc()); // Doc() has only a step class
+        Assert.DoesNotContain("Collaborators", html);
+    }
+
     [Fact]
     public void Handles_an_empty_map_without_throwing()
     {
