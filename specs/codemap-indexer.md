@@ -167,8 +167,16 @@ codemap stats  [<db>]      Human-readable summary: entity counts per project,
 codemap report [<db>]      Writes a single self-contained HTML drill-down of the map
     --html <file>          Output path (default: <db>.html)
 
+codemap search [<db>] <query>   FTS5 search over step definitions and scenarios
+    --steps                Step definitions only
+    --scenarios            Scenarios only
+
 codemap validate [<db>]    Checks file is a CodeMap db and schema version is supported
 ```
+
+`search` runs the query against both FTS5 indexes: `search_steps` (step-definition expression /
+method / class) and `search_scenarios` (feature / scenario / step text / tags), printing each hit
+resolved to its name and `file:line`. `--steps` / `--scenarios` narrows to one facet.
 
 The `report` command is the **v1.x HTML visualization** on the roadmap (§13). It reads a map
 file and emits one self-contained HTML document — inline CSS/JS only, no external stylesheet,

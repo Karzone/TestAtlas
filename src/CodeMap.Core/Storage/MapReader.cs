@@ -322,15 +322,22 @@ public static class MapReader
 
     /// <summary>FTS5 search over <c>search_steps</c> (spec §5.3 / A7). Returns matching step-def rowids.</summary>
     public static IReadOnlyList<long> SearchSteps(string dbPath, string query)
+        => SearchFts(dbPath, "search_steps", query);
+
+    /// <summary>FTS5 search over <c>search_scenarios</c> (spec §5.3). Returns matching scenario rowids.</summary>
+    public static IReadOnlyList<long> SearchScenarios(string dbPath, string query)
+        => SearchFts(dbPath, "search_scenarios", query);
+
+    private static IReadOnlyList<long> SearchFts(string dbPath, string table, string query)
     {
         var cs = new SqliteConnectionStringBuilder { DataSource = Path.GetFullPath(dbPath), Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
         using var conn = new SqliteConnection(cs);
         conn.Open();
         var ids = new List<long>();
-        if (TableExists(conn, "search_steps"))
+        if (TableExists(conn, table))
         {
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT rowid FROM search_steps WHERE search_steps MATCH $q ORDER BY rowid;";
+            cmd.CommandText = $"SELECT rowid FROM {table} WHERE {table} MATCH $q ORDER BY rowid;";
             var p = cmd.CreateParameter(); p.ParameterName = "$q"; p.Value = query; cmd.Parameters.Add(p);
             using var r = cmd.ExecuteReader();
             while (r.Read()) ids.Add(r.GetInt64(0));

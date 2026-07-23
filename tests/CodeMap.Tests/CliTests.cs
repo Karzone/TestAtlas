@@ -95,6 +95,41 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
         Assert.Equal(ExitCode.BadArgs, code);
     }
 
+    [Fact]
+    public void Search_finds_both_step_definitions_and_scenarios()
+    {
+        var (code, stdout) = Capture(() => Commands.RunSearch(new[] { _fx.DbPath, "dashboard" }));
+        Assert.Equal(ExitCode.Success, code);
+        Assert.Contains("step definitions matching 'dashboard': 1", stdout);
+        Assert.Contains("the dashboard is shown", stdout);
+        Assert.Contains("scenarios matching 'dashboard': 1", stdout);
+        Assert.Contains("Successful sign in", stdout);
+    }
+
+    [Fact]
+    public void Search_scenarios_only_omits_the_step_facet()
+    {
+        var (code, stdout) = Capture(() => Commands.RunSearch(new[] { _fx.DbPath, "login", "--scenarios" }));
+        Assert.Equal(ExitCode.Success, code);
+        Assert.DoesNotContain("step definitions matching", stdout);
+        Assert.Contains("scenarios matching 'login': 2", stdout);
+    }
+
+    [Fact]
+    public void Search_reports_no_matches_cleanly()
+    {
+        var (code, stdout) = Capture(() => Commands.RunSearch(new[] { _fx.DbPath, "zzzznope" }));
+        Assert.Equal(ExitCode.Success, code);
+        Assert.Contains("no matches for 'zzzznope'", stdout);
+    }
+
+    [Fact]
+    public void Search_without_a_query_is_bad_args()
+    {
+        var (code, _) = Capture(() => Commands.RunSearch(Array.Empty<string>()));
+        Assert.Equal(ExitCode.BadArgs, code);
+    }
+
     // ---- pure arg-parsing contract -----------------------------------------------------------
     [Fact]
     public void ArgParser_accepts_the_happy_path()

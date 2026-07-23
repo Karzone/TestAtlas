@@ -23,6 +23,7 @@ return command switch
     "stats" => Commands.RunStats(rest),
     "validate" => Commands.RunValidate(rest),
     "report" => Commands.RunReport(rest),
+    "search" => Commands.RunSearch(rest),
     "-h" or "--help" or "help" => Ok(Commands.PrintUsage),
     _ => Fail($"Unknown command '{command}'.")
 };
@@ -260,6 +261,76 @@ public static class Commands
         return ExitCode.Success;
     }
 
+    public static int RunSearch(string[] args)
+    {
+        var positional = args.Where(a => !a.StartsWith('-')).ToArray();
+        string dbPath, query;
+        if (positional.Length >= 2) { dbPath = positional[0]; query = positional[1]; }
+        else if (positional.Length == 1) { dbPath = Path.Combine(Directory.GetCurrentDirectory(), "codemap.db"); query = positional[0]; }
+        else return BadArgs("usage: testatlas search [<db>] <query> [--steps] [--scenarios]");
+
+        if (!File.Exists(dbPath))
+            return BadArgs($"map file not found: {dbPath}");
+
+        // Default: search both facets; --steps / --scenarios narrows to one.
+        var wantSteps = args.Contains("--steps") || !args.Contains("--scenarios");
+        var wantScenarios = args.Contains("--scenarios") || !args.Contains("--steps");
+
+        MapDocument doc;
+        try
+        {
+            doc = MapReader.Read(dbPath);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"error: could not read map '{dbPath}': {ex.Message}");
+            return ExitCode.Fatal;
+        }
+
+        var total = 0;
+
+        if (wantSteps)
+        {
+            List<long> hits;
+            try { hits = MapReader.SearchSteps(dbPath, query).ToList(); }
+            catch (Exception ex) { return BadArgs($"invalid search query: {ex.Message}"); }
+
+            var byId = doc.StepDefinitions.ToDictionary(d => (long)d.Id);
+            var classById = doc.Classes.ToDictionary(c => c.Id);
+            Console.WriteLine($"step definitions matching '{query}': {hits.Count}");
+            foreach (var id in hits)
+            {
+                if (!byId.TryGetValue(id, out var d)) continue;
+                var cls = classById.TryGetValue(d.ClassId, out var c) ? c.Name : "?";
+                Console.WriteLine($"  [{d.Keyword}] {d.Expression}  ({cls}, {Path.GetFileName(d.FilePath)}:{d.LineStart})");
+            }
+            total += hits.Count;
+        }
+
+        if (wantScenarios)
+        {
+            List<long> hits;
+            try { hits = MapReader.SearchScenarios(dbPath, query).ToList(); }
+            catch (Exception ex) { return BadArgs($"invalid search query: {ex.Message}"); }
+
+            var byId = doc.Scenarios.ToDictionary(s => (long)s.Id);
+            var featureById = doc.Features.ToDictionary(f => f.Id);
+            if (wantSteps) Console.WriteLine();
+            Console.WriteLine($"scenarios matching '{query}': {hits.Count}");
+            foreach (var id in hits)
+            {
+                if (!byId.TryGetValue(id, out var s)) continue;
+                var feature = featureById.TryGetValue(s.FeatureId, out var f) ? f.Name : "?";
+                Console.WriteLine($"  {feature} › {s.Name}  ({Path.GetFileName(s.FilePath)}:{s.LineStart})");
+            }
+            total += hits.Count;
+        }
+
+        if (total == 0)
+            Console.WriteLine($"no matches for '{query}'.");
+        return ExitCode.Success;
+    }
+
     private static string? OptionValue(string[] args, string name)
     {
         var i = Array.IndexOf(args, name);
@@ -318,6 +389,9 @@ public static class Commands
               testatlas stats [<db>]      entity counts per project, unbound/ambiguous, diagnostics
               testatlas report [<db>]     write a self-contained HTML drill-down of the map
                   --html <file>       output path (default <db>.html)
+              testatlas search [<db>] <query>   FTS5 search over step definitions and scenarios
+                  --steps             step definitions only
+                  --scenarios         scenarios only
               testatlas validate [<db>]   check the file is a supported TestAtlas map
 
             exit codes: 0 ok · 1 completed with warnings · 2 fatal · 3 bad arguments

@@ -61,5 +61,19 @@ step definition + `file:line`), **ambiguous** (all candidates listed), or **unbo
 narrows the tree client-side. It reads the map only — no solution load — so it's instant and works on
 any `codemap.db` you already have.
 
+### Search
+
+```bash
+dotnet run --project src/CodeMap.Cli -- search reqdemo.db dashboard
+# step definitions matching 'dashboard': 1
+#   [Then] the dashboard is shown  (LoginStepDefinitions, LoginStepDefinitions.cs:…)
+# scenarios matching 'dashboard': 1
+#   Login › Successful sign in  (Login.feature:…)
+```
+
+`testatlas search [<db>] <query>` runs the query against both FTS5 indexes — `search_steps`
+(step-definition text) and `search_scenarios` (feature / scenario / step text / tags) — and prints
+each hit resolved to its name and `file:line`. `--steps` / `--scenarios` narrows to one facet.
+
 > The same commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.

@@ -201,6 +201,23 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
+    public void Fts5_search_over_scenarios_finds_the_matching_scenario()
+    {
+        // 'dashboard' appears only in the "Successful sign in" scenario's step text.
+        var hits = MapReader.SearchScenarios(_fx.DbPath, "dashboard");
+        var signIn = _fx.Doc.Scenarios.Single(s => s.Name == "Successful sign in");
+        Assert.Equal(new[] { (long)signIn.Id }, hits.ToArray());
+
+        // The feature name is indexed too: 'login' matches both Login scenarios, neither Checkout one.
+        var loginHits = MapReader.SearchScenarios(_fx.DbPath, "login")
+            .Select(id => _fx.Doc.Scenarios.Single(s => s.Id == (int)id).Name)
+            .OrderBy(n => n).ToArray();
+        Assert.Equal(new[] { "Readiness", "Successful sign in" }, loginHits);
+
+        Assert.Empty(MapReader.SearchScenarios(_fx.DbPath, "zzzznope"));
+    }
+
+    [Fact]
     public void Method_signature_and_visibility_are_recorded()
     {
         var m = _fx.Doc.Methods.Single(x => x.Name == "GivenAUserNamed");
