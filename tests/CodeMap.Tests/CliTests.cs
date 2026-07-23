@@ -63,6 +63,38 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
         Assert.Contains("Fixture.SpecFlow", stdout);
     }
 
+    [Fact]
+    public void Report_writes_a_self_contained_html_file_and_returns_success()
+    {
+        using var temp = new TempDir();
+        var html = temp.File("report.html");
+        var (code, stdout) = Capture(() => Commands.RunReport(new[] { _fx.DbPath, "--html", html }));
+
+        Assert.Equal(ExitCode.Success, code);
+        Assert.True(File.Exists(html));
+        var body = File.ReadAllText(html);
+
+        // Self-contained: no external stylesheet/script/font references.
+        Assert.DoesNotContain("<link", body);
+        Assert.DoesNotContain("src=\"http", body);
+        Assert.DoesNotContain("href=\"http", body);
+
+        // Vacuity: real map content is present, not just a shell.
+        Assert.Contains("<!doctype html>", body);
+        Assert.Contains("Login", body);
+        Assert.Contains("pigs can fly", body);            // the unbound step
+        Assert.Contains("no matching step definition", body);
+        Assert.Contains("2 candidates", body);            // the ambiguous step
+        Assert.Contains("report.html", stdout);
+    }
+
+    [Fact]
+    public void Report_missing_map_is_bad_args()
+    {
+        var (code, _) = Capture(() => Commands.RunReport(new[] { "/no/such/map.db" }));
+        Assert.Equal(ExitCode.BadArgs, code);
+    }
+
     // ---- pure arg-parsing contract -----------------------------------------------------------
     [Fact]
     public void ArgParser_accepts_the_happy_path()

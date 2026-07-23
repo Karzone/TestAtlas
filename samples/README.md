@@ -47,5 +47,19 @@ class kinds:
 reports the bound / unbound / ambiguous tallies. Steps are searchable via the FTS5 tables
 `search_steps` (step-definition text) and `search_scenarios` (feature / scenario / step text / tags).
 
-> The same two commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
+### Visual report
+
+```bash
+dotnet run --project src/CodeMap.Cli -- report reqdemo.db --html reqdemo.html
+# -> open reqdemo.html in any browser
+```
+
+`testatlas report` writes a single self-contained HTML file (inline CSS/JS, no network) with the
+summary counts, a step-binding **coverage** bar, the class-kind breakdown, a per-project table, and a
+feature → scenario → step drill-down where each step is colour-tagged **bound** (with its resolved
+step definition + `file:line`), **ambiguous** (all candidates listed), or **unbound**. A filter box
+narrows the tree client-side. It reads the map only — no solution load — so it's instant and works on
+any `codemap.db` you already have.
+
+> The same commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.

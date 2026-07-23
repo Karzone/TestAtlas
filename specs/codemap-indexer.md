@@ -164,8 +164,20 @@ codemap index [<path-to-.sln|.csproj>] [options]
 codemap stats  [<db>]      Human-readable summary: entity counts per project,
                            unbound step count, ambiguous binding count
 
+codemap report [<db>]      Writes a single self-contained HTML drill-down of the map
+    --html <file>          Output path (default: <db>.html)
+
 codemap validate [<db>]    Checks file is a CodeMap db and schema version is supported
 ```
+
+The `report` command is the **v1.x HTML visualization** on the roadmap (§13). It reads a map
+file and emits one self-contained HTML document — inline CSS/JS only, no external stylesheet,
+script, font, or network request, so it opens offline straight from disk. Sections: summary
+counts, step-binding **coverage** (bound / ambiguous / unbound), class-kind breakdown,
+per-project table, a feature → scenario → step drill-down where each step is tagged with its
+resolved step definition (or the honest "no matching step definition" for `unbound`), and a
+diagnostics table. All map-derived text is HTML-escaped. Deterministic: the only volatile value
+(the generated timestamp) is read from the map, not the clock.
 
 **Exit codes:** `0` success · `1` completed with warnings (e.g. a project failed to load
 — map is still written, gaps noted in `diagnostics`) · `2` fatal (no loadable projects,
@@ -261,6 +273,6 @@ Determinism requirement: two runs on identical input produce identical row conte
 ## 13. Roadmap context (non-binding)
 
 - **v1** — this spec: C# indexer CLI + documented schema.
-- **v1.x** — `codemap map` HTML visualization generated from the db.
+- **v1.x** — HTML visualization generated from the db. **Landed** as `testatlas report [<db>] --html`.
 - **v2** — MCP server package reading the same db; agent-wiring documentation.
 - **Later** — second-language indexer (schema contract test), incremental indexing.

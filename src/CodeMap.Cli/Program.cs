@@ -2,6 +2,7 @@ using System.Diagnostics;
 using TestAtlas.Cli;
 using TestAtlas.Core.Indexing;
 using TestAtlas.Core.Model;
+using TestAtlas.Core.Reporting;
 using TestAtlas.Core.Storage;
 
 // TestAtlas CLI (working verb: `testatlas`). Slice 1: `index`, `stats`, `validate`.
@@ -21,6 +22,7 @@ return command switch
     "index" => Commands.RunIndex(rest),
     "stats" => Commands.RunStats(rest),
     "validate" => Commands.RunValidate(rest),
+    "report" => Commands.RunReport(rest),
     "-h" or "--help" or "help" => Ok(Commands.PrintUsage),
     _ => Fail($"Unknown command '{command}'.")
 };
@@ -214,6 +216,56 @@ public static class Commands
         return ExitCode.Success;
     }
 
+    public static int RunReport(string[] args)
+    {
+        var dbPath = args.FirstOrDefault(a => !a.StartsWith('-'))
+                     ?? Path.Combine(Directory.GetCurrentDirectory(), "codemap.db");
+        if (!File.Exists(dbPath))
+            return BadArgs($"map file not found: {dbPath}");
+
+        var output = OptionValue(args, "--html")
+                     ?? OptionValue(args, "--output")
+                     ?? Path.ChangeExtension(dbPath, ".html");
+
+        MapDocument doc;
+        try
+        {
+            doc = MapReader.Read(dbPath);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"error: could not read map '{dbPath}': {ex.Message}");
+            return ExitCode.Fatal;
+        }
+
+        string html;
+        try
+        {
+            html = HtmlReportBuilder.Build(doc);
+            File.WriteAllText(output, html);
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"error: could not write report to '{output}': {ex.Message}");
+            return ExitCode.Fatal;
+        }
+
+        var steps = doc.ScenarioSteps.Count;
+        var resolved = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.BindsTo).Select(e => e.FromId).Distinct().Count();
+        var coverage = steps == 0 ? 0 : (int)Math.Round(100.0 * resolved / steps);
+        Console.WriteLine(
+            $"Wrote report -> {output} " +
+            $"({doc.Features.Count} feature(s), {doc.Scenarios.Count} scenario(s), {steps} step(s), {coverage}% bound). " +
+            "Open it in any browser.");
+        return ExitCode.Success;
+    }
+
+    private static string? OptionValue(string[] args, string name)
+    {
+        var i = Array.IndexOf(args, name);
+        return i >= 0 && i + 1 < args.Length ? args[i + 1] : null;
+    }
+
     private static bool TryResolveInput(string? positional, out string inputPath, out string? error)
     {
         error = null;
@@ -264,6 +316,8 @@ public static class Commands
                   --verbose           per-project progress
                   --quiet             errors only
               testatlas stats [<db>]      entity counts per project, unbound/ambiguous, diagnostics
+              testatlas report [<db>]     write a self-contained HTML drill-down of the map
+                  --html <file>       output path (default <db>.html)
               testatlas validate [<db>]   check the file is a supported TestAtlas map
 
             exit codes: 0 ok · 1 completed with warnings · 2 fatal · 3 bad arguments
