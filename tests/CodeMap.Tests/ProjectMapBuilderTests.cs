@@ -68,6 +68,27 @@ public sealed class ProjectMapBuilderTests
     }
 
     [Fact]
+    public void Has_theme_toggle_collapsible_header_and_a_working_hover_highlight_rule()
+    {
+        var html = ProjectMapBuilder.Build(Doc());
+
+        // Manual light/dark: a theme toggle + the data-theme overrides + an early theme-init script.
+        Assert.Contains("toggleTheme()", html);
+        Assert.Contains("[data-theme=\"dark\"]", html);
+        Assert.Contains("[data-theme=\"light\"]", html);
+        Assert.Contains("testatlas:theme", html);
+
+        // Full-view: a collapsible floating panel.
+        Assert.Contains("toggleHeader()", html);
+        Assert.Contains("id=\"collapseBtn\"", html);
+
+        // Hover-highlight specificity fix: the .active rule is scoped under svg.has-focus so it beats
+        // the dimming rule (the earlier bug was that dimming out-ranked the highlight).
+        Assert.Contains("svg.has-focus .edge.active", html);
+        Assert.Contains("svg.has-focus .node.active", html);
+    }
+
+    [Fact]
     public void Handles_a_map_with_no_projects()
     {
         var html = ProjectMapBuilder.Build(new MapDocument { UserVersion = MapSchema.Version });

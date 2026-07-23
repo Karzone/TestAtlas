@@ -90,9 +90,17 @@ public static class ProjectMapBuilder
         var sb = new StringBuilder(32 * 1024);
         sb.Append("<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">");
         sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">");
-        sb.Append("<title>TestAtlas map — ").Append(E(solutionName)).Append("</title><style>").Append(Css).Append("</style></head><body>");
+        sb.Append("<title>TestAtlas map — ").Append(E(solutionName)).Append("</title><style>").Append(Css).Append("</style>");
+        sb.Append("<script>").Append(ThemeInit).Append("</script></head><body>");
 
-        sb.Append("<header class=\"top\"><div class=\"brand\">Test<span>Atlas</span> <span class=\"tag\">project map</span></div>");
+        // Floating, collapsible panel so the graph can use the whole viewport.
+        sb.Append("<header class=\"top\" id=\"top\"><div class=\"hdr-row\">");
+        sb.Append("<div class=\"brand\">Test<span>Atlas</span> <span class=\"tag\">project map</span></div>");
+        sb.Append("<div class=\"hdr-actions\">");
+        sb.Append("<button class=\"ic\" onclick=\"toggleTheme()\" title=\"Toggle light / dark\" aria-label=\"Toggle theme\">◐</button>");
+        sb.Append("<button class=\"ic\" id=\"collapseBtn\" onclick=\"toggleHeader()\" title=\"Collapse panel\" aria-label=\"Collapse panel\">–</button>");
+        sb.Append("</div></div>");
+        sb.Append("<div class=\"hdr-detail\">");
         sb.Append("<h1>").Append(E(solutionName)).Append("</h1>");
         sb.Append("<p class=\"meta\">").Append(n).Append(" projects · ").Append(links.Count)
           .Append(" dependencies · an arrow A→B means A depends on B (binds to / uses / inherits something in B)</p>");
@@ -102,7 +110,7 @@ public static class ProjectMapBuilder
         LegendSwatch(sb, "unit_tests", "unit tests");
         LegendSwatch(sb, "other", "other");
         sb.Append("<span class=\"hint\">drag to pan · scroll to zoom · hover a project to isolate its links</span>");
-        sb.Append("</div></header>");
+        sb.Append("</div></div></header>");
 
         if (n == 0)
         {
@@ -198,37 +206,53 @@ public static class ProjectMapBuilder
     private const string Css = """
         :root{--bg:#f6f7f9;--ink:#1a1d21;--dim:#5b6470;--faint:#8b94a1;--line:#e4e7ec;--card:#fff;
         --bdd:#3b5bdb;--shared:#2f9e44;--unit:#e8890c;--other:#98a2b3;--mono:ui-monospace,Menlo,Consolas,monospace}
-        @media(prefers-color-scheme:dark){:root{--bg:#0f1216;--ink:#e6e9ee;--dim:#9aa4b2;--faint:#6b7484;--line:#252b33;--card:#171b21;
-        --bdd:#748ffc;--shared:#51cf66;--unit:#ffa94d;--other:#6b7484}}
+        /* dark = OS-dark unless the user forced light; or explicitly forced dark */
+        @media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1216;--ink:#e6e9ee;--dim:#9aa4b2;
+        --faint:#6b7484;--line:#252b33;--card:#171b21;--bdd:#748ffc;--shared:#51cf66;--unit:#ffa94d;--other:#7b8494}}
+        :root[data-theme="dark"]{--bg:#0f1216;--ink:#e6e9ee;--dim:#9aa4b2;--faint:#6b7484;--line:#252b33;--card:#171b21;
+        --bdd:#748ffc;--shared:#51cf66;--unit:#ffa94d;--other:#7b8494}
         *{box-sizing:border-box}html,body{height:100%}
-        body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink);
-        display:flex;flex-direction:column}
-        .top{padding:18px 24px 12px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--card),transparent)}
+        body{margin:0;font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+        svg{position:fixed;inset:0;width:100vw;height:100vh;touch-action:none;cursor:grab}
+        svg.grabbing{cursor:grabbing}
+        .top{position:fixed;top:12px;left:12px;z-index:5;max-width:min(680px,calc(100vw - 24px));
+        background:color-mix(in srgb,var(--card) 90%,transparent);backdrop-filter:blur(8px);
+        border:1px solid var(--line);border-radius:12px;padding:12px 16px;box-shadow:0 2px 12px rgba(0,0,0,.10)}
+        .hdr-row{display:flex;align-items:center;gap:12px}
         .brand{font-weight:600;color:var(--dim)}.brand span{color:var(--bdd)}
         .brand .tag{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-left:6px}
-        h1{margin:8px 0 3px;font-size:22px;font-weight:600;letter-spacing:-.3px}
+        .hdr-actions{margin-left:auto;display:flex;gap:6px}
+        .ic{width:26px;height:26px;line-height:1;font-size:14px;border:1px solid var(--line);border-radius:7px;
+        background:var(--bg);color:var(--dim);cursor:pointer;display:flex;align-items:center;justify-content:center}
+        .ic:hover{color:var(--ink);border-color:var(--faint)}
+        .top.collapsed .hdr-detail{display:none}
+        h1{margin:10px 0 3px;font-size:20px;font-weight:600;letter-spacing:-.3px}
         .meta{margin:0;color:var(--faint);font-size:12.5px}
-        .legend{display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--dim)}
+        .legend{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-top:10px;font-size:12px;color:var(--dim)}
         .lg{display:inline-flex;align-items:center;gap:6px}
         .sw{width:10px;height:10px;border-radius:50%;display:inline-block}
         .sw.kind-bdd_tests{background:var(--bdd)}.sw.kind-shared_library{background:var(--shared)}
         .sw.kind-unit_tests{background:var(--unit)}.sw.kind-other{background:var(--other)}
-        .hint{margin-left:auto;color:var(--faint);font-size:11.5px}
-        svg{flex:1;width:100%;min-height:0;touch-action:none;cursor:grab}
-        svg.grabbing{cursor:grabbing}
+        .hint{color:var(--faint);font-size:11.5px;flex-basis:100%}
         .empty{color:var(--faint);text-align:center;padding:40px}
-        .edge{fill:none;stroke:var(--faint);opacity:.45}
-        .arrowhead{fill:var(--faint);opacity:.7}
+        .edge{fill:none;stroke:var(--faint);opacity:.4}
+        .arrowhead{fill:var(--faint);opacity:.6}
         .node circle{stroke:var(--card);stroke-width:2;cursor:pointer}
         .node.kind-bdd_tests circle{fill:var(--bdd)}.node.kind-shared_library circle{fill:var(--shared)}
         .node.kind-unit_tests circle{fill:var(--unit)}.node.kind-other circle{fill:var(--other)}
         .node text{fill:var(--ink);font-size:12px;font-weight:500;pointer-events:none;paint-order:stroke;
         stroke:var(--bg);stroke-width:3px}
-        svg.has-focus .edge{opacity:.06}svg.has-focus .arrowhead{opacity:.06}
-        svg.has-focus .node{opacity:.25}
-        .edge.active{opacity:.85;stroke:var(--bdd)}.edge.active~*{}
-        .node.active{opacity:1}
+        /* hover-to-isolate: dim everything, then the .active prefix wins on specificity */
+        svg.has-focus .edge{opacity:.05}
+        svg.has-focus .node{opacity:.18}
+        svg.has-focus .edge.active{opacity:.95;stroke:var(--bdd)}
+        svg.has-focus .node.active{opacity:1}
         @media(prefers-reduced-motion:no-preference){.edge,.node{transition:opacity .12s}}
+        """;
+
+    // Runs in <head> before paint so a saved manual theme choice applies without a flash.
+    private const string ThemeInit = """
+        (function(){try{var s=localStorage.getItem('testatlas:theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}})();
         """;
 
     private const string Js = """
@@ -274,5 +298,15 @@ public static class ProjectMapBuilder
           function end(){drag=null;svg.classList.remove('grabbing');}
           svg.addEventListener('pointerup',end); svg.addEventListener('pointercancel',end);
         })();
+        function toggleHeader(){
+          var t=document.getElementById('top'); t.classList.toggle('collapsed');
+          document.getElementById('collapseBtn').textContent=t.classList.contains('collapsed')?'+':'–';
+        }
+        function toggleTheme(){
+          var r=document.documentElement, cur=r.getAttribute('data-theme');
+          var dark = cur ? cur==='dark' : matchMedia('(prefers-color-scheme:dark)').matches;
+          var next = dark?'light':'dark'; r.setAttribute('data-theme',next);
+          try{localStorage.setItem('testatlas:theme',next);}catch(e){}
+        }
         """;
 }
