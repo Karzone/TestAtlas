@@ -15,9 +15,10 @@ public enum StepKeyword
 }
 
 /// <summary>
-/// The keyword a binding attribute declares. <see cref="StepDefinition"/> (Reqnroll/SpecFlow
-/// <c>[StepDefinition]</c>) is a wildcard — it binds a step of any keyword; the other three bind
-/// only their own keyword.
+/// The keyword a binding attribute declares — retained as metadata (it is the attribute the author
+/// wrote). It does NOT scope matching: Reqnroll/SpecFlow ignore the keyword when resolving a step to
+/// a definition, so the matcher does too. <see cref="StepDefinition"/> is the explicit
+/// keyword-neutral attribute; in practice all four match a step of any keyword.
 /// </summary>
 public enum BindingKeyword
 {
@@ -145,9 +146,11 @@ public static class StepMatcher
 
         foreach (var cb in compiled)
         {
-            if (!KeywordCompatible(cb.Binding.Keyword, step.Keyword))
-                continue;
-
+            // Keyword-AGNOSTIC on purpose. Reqnroll/SpecFlow (following Cucumber) do NOT consider the
+            // Given/When/Then keyword when resolving a step to a definition — a [When]-attributed
+            // method binds a Given/Then/And step of the same text ("Keywords are not taken into
+            // account when looking for a step definition", Reqnroll docs). Filtering on keyword here
+            // made ~86% of real And-steps falsely "unbound". See specs/codemap-indexer.md §5.2.
             var m = cb.Pattern.Match(text);
             if (!m.Success)
                 continue;
@@ -171,13 +174,6 @@ public static class StepMatcher
 
         return new MatchResult(confidence, matches);
     }
-
-    /// <summary>A binding binds a step if it is a wildcard [StepDefinition] or shares its keyword.</summary>
-    private static bool KeywordCompatible(BindingKeyword binding, StepKeyword step)
-        => binding == BindingKeyword.StepDefinition
-           || (binding == BindingKeyword.Given && step == StepKeyword.Given)
-           || (binding == BindingKeyword.When && step == StepKeyword.When)
-           || (binding == BindingKeyword.Then && step == StepKeyword.Then);
 
     private static Regex? TryBuildRegex(StepBinding binding)
     {

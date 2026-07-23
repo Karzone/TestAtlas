@@ -36,10 +36,10 @@ public sealed class StepMatcherTests
             new[] { Rx(BindingKeyword.Given, "a user named (.*)", "named") },
             MatchConfidence.Exact, new[] { "named" }, Params: new[] { "Alice" }),
 
-        new("regex keyword mismatch does not bind",
+        new("keyword is IGNORED — a When step binds a [Given] definition (Reqnroll semantics)",
             StepKeyword.When, "a user named Alice",
             new[] { Rx(BindingKeyword.Given, "a user named (.*)", "named") },
-            MatchConfidence.Unbound, Array.Empty<string>()),
+            MatchConfidence.Exact, new[] { "named" }, Params: new[] { "Alice" }),
 
         new("[StepDefinition] is a wildcard — binds any keyword",
             StepKeyword.Then, "do the thing",
@@ -107,10 +107,10 @@ public sealed class StepMatcherTests
             new[] { Cuke(BindingKeyword.When, "I click ok/cancel", "alt") },
             MatchConfidence.Unbound, Array.Empty<string>()),
 
-        new("cucumber keyword mismatch does not bind",
+        new("keyword ignored for cucumber too — a When step binds a [Given] cucumber definition",
             StepKeyword.When, "a cart with 3 items",
             new[] { Cuke(BindingKeyword.Given, "a cart with {int} item(s)", "cart") },
-            MatchConfidence.Unbound, Array.Empty<string>()),
+            MatchConfidence.Exact, new[] { "cart" }, Params: new[] { "3" }),
 
         new("cucumber unrelated text does not bind",
             StepKeyword.Given, "totally different",
@@ -127,33 +127,33 @@ public sealed class StepMatcherTests
             },
             MatchConfidence.Ambiguous, new[] { "exact", "pattern" }),
 
-        new("ambiguity only counts keyword-compatible candidates",
+        new("candidates under different keywords both match the same text → ambiguous",
             StepKeyword.Given, "the system is ready",
             new[]
             {
                 Rx(BindingKeyword.Given, "the system is ready", "g"),
                 Rx(BindingKeyword.When, "the system is (.*)", "w"),
             },
-            MatchConfidence.Exact, new[] { "g" }),
+            MatchConfidence.Ambiguous, new[] { "g", "w" }),
 
-        // ── multiple binding attributes on ONE method (caller expands to two bindings) ───────
-        new("[Given]+[When] on one method — a Given step picks the Given attribute",
+        // ── two binding attributes on ONE method: both match regardless of the step's keyword ─
+        new("[Given]+[When] on one method — a Given step matches BOTH (keyword ignored)",
             StepKeyword.Given, "reset",
             new[]
             {
                 Rx(BindingKeyword.Given, "reset", "M#given"),
                 Rx(BindingKeyword.When, "reset", "M#when"),
             },
-            MatchConfidence.Exact, new[] { "M#given" }),
+            MatchConfidence.Ambiguous, new[] { "M#given", "M#when" }),
 
-        new("[Given]+[When] on one method — a When step picks the When attribute",
+        new("[Given]+[When] on one method — a When step ALSO matches both (same outcome)",
             StepKeyword.When, "reset",
             new[]
             {
                 Rx(BindingKeyword.Given, "reset", "M#given"),
                 Rx(BindingKeyword.When, "reset", "M#when"),
             },
-            MatchConfidence.Exact, new[] { "M#when" }),
+            MatchConfidence.Ambiguous, new[] { "M#given", "M#when" }),
 
         new("[StepDefinition] and [Given] both match — ambiguous",
             StepKeyword.Given, "reset",

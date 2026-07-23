@@ -106,6 +106,15 @@ A single `edges` table: `(from_kind, from_id, to_kind, to_id, edge_kind, confide
 | `uses_type` | Method → Class | Method constructs, receives, or dereferences the class (how step classes reach page objects/API clients) |
 | `inherits` | Class → Class | Base-type relationship within the solution |
 
+**Keyword-agnostic matching.** A step binds to a definition on **text alone** — the Given/When/Then
+keyword is deliberately *not* used to filter candidates, because Reqnroll/SpecFlow themselves ignore
+it ("Keywords are not taken into account when looking for a step definition"). A `[When("…")]`
+definition therefore binds a `Given` / `Then` / `And` step of the same text. (An earlier build filtered
+on keyword and so reported ~86% of real `And` steps as falsely `unbound`; the `BindingKeyword` is now
+retained only as metadata.) A consequence: the same text under two different keyword attributes is a
+genuine duplicate and surfaces as `ambiguous`, matching SpecFlow's own "no duplicate step text" rule.
+Matching is still scoped **per project** (a test assembly resolves its own bindings).
+
 **Implementation status.** `binds_to` / `unbound` (slice 2b) and `inherits` / `uses_type` (slice 3)
 are built. All are resolved **syntactically** — by simple type name across the solution — to preserve
 the "works on unrestored projects" guarantee (G3): `inherits` matches a class's base-type name to a
