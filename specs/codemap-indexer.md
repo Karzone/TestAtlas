@@ -185,7 +185,10 @@ counts, step-binding **coverage** (bound / ambiguous / unbound), class-kind brea
 per-project table, a feature → scenario → step drill-down where each step is tagged with its
 resolved step definition (or the honest "no matching step definition" for `unbound`), and a
 diagnostics table. All map-derived text is HTML-escaped. Deterministic: the only volatile value
-(the generated timestamp) is read from the map, not the clock.
+(the generated timestamp) is read from the map, not the clock. When the map's `user_version`
+predates the current schema, the report shows a **stale-schema banner** (and `report`/`search`
+print a matching console note) explaining that facets like Gherkin features / coverage / search are
+empty because the map is old — re-run `index` to populate them — so empty sections never read as a bug.
 
 **Exit codes:** `0` success · `1` completed with warnings (e.g. a project failed to load
 — map is still written, gaps noted in `diagnostics`) · `2` fatal (no loadable projects,

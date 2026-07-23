@@ -64,6 +64,20 @@ public static class HtmlReportBuilder
 
         sb.Append("<main class=\"wrap\">");
 
+        // ---- stale-schema banner ------------------------------------------------------------
+        // A map written by an older schema is missing whole facets (e.g. a v2 map has no Gherkin
+        // features / edges), so the empty sections below would otherwise look like a bug. Say so.
+        if (doc.UserVersion != MapSchema.Version)
+        {
+            sb.Append("<div class=\"banner\"><b>This map was written by schema v").Append(doc.UserVersion)
+              .Append("; this tool is v").Append(MapSchema.Version).Append(".</b> ");
+            sb.Append(doc.UserVersion < MapSchema.Version
+                ? "It predates newer data (e.g. Gherkin features, step-binding coverage, and search). "
+                  + "Re-run <code>testatlas index</code> to populate them."
+                : "It was written by a newer tool; some sections may be incomplete. Upgrade this tool to read it fully.");
+            sb.Append("</div>");
+        }
+
         // ---- summary cards ------------------------------------------------------------------
         sb.Append("<section class=\"cards\">");
         Card(sb, doc.Projects.Count, "projects");
@@ -294,6 +308,10 @@ public static class HtmlReportBuilder
         h1{margin:10px 0 4px;font-size:26px;font-weight:650;letter-spacing:-.3px}
         .meta{margin:0;color:var(--faint);font-size:12.5px;font-family:var(--mono);word-break:break-all}
         main{padding:24px 24px 64px}
+        .banner{background:color-mix(in srgb,var(--amber) 12%,var(--card));border:1px solid var(--amber);
+        border-radius:10px;padding:12px 16px;margin:16px 0 4px;font-size:13.5px;line-height:1.55}
+        .banner code{font-family:var(--mono);font-size:12px;background:var(--card);border:1px solid var(--line);
+        border-radius:5px;padding:1px 6px}
         .cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px;margin:8px 0 24px}
         .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
         .c-num{font-size:28px;font-weight:680;font-variant-numeric:tabular-nums;letter-spacing:-.5px}

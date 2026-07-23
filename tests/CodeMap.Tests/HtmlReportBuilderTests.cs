@@ -92,6 +92,24 @@ public sealed class HtmlReportBuilderTests
     }
 
     [Fact]
+    public void Shows_a_stale_schema_banner_for_an_older_map()
+    {
+        // A v(Version-1) map is missing whole facets; the banner must explain the empty sections.
+        var doc = new MapDocument { UserVersion = MapSchema.Version - 1 };
+        var html = HtmlReportBuilder.Build(doc);
+        Assert.Contains("class=\"banner\"", html);
+        Assert.Contains($"schema v{MapSchema.Version - 1}", html);
+        Assert.Contains("testatlas index", html); // tells the reader how to fix it
+    }
+
+    [Fact]
+    public void Does_not_show_the_banner_for_a_current_map() // vacuity guard for the test above
+    {
+        var html = HtmlReportBuilder.Build(Doc()); // Doc() is UserVersion == MapSchema.Version
+        Assert.DoesNotContain("class=\"banner\"", html);
+    }
+
+    [Fact]
     public void Handles_an_empty_map_without_throwing()
     {
         var html = HtmlReportBuilder.Build(new MapDocument { UserVersion = MapSchema.Version });

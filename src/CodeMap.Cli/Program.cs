@@ -258,7 +258,17 @@ public static class Commands
             $"Wrote report -> {output} " +
             $"({doc.Features.Count} feature(s), {doc.Scenarios.Count} scenario(s), {steps} step(s), {coverage}% bound). " +
             "Open it in any browser.");
+        WarnIfStaleSchema(doc.UserVersion);
         return ExitCode.Success;
+    }
+
+    /// <summary>Shared note when a map predates the current schema — the report/search sees empty facets.</summary>
+    private static void WarnIfStaleSchema(int version)
+    {
+        if (version < MapSchema.Version)
+            Console.WriteLine(
+                $"note: this map is schema v{version}; this tool is v{MapSchema.Version}. It predates newer data " +
+                "(Gherkin features, step-binding coverage, search) — re-run `testatlas index` to populate them.");
     }
 
     public static int RunSearch(string[] args)
@@ -328,6 +338,7 @@ public static class Commands
 
         if (total == 0)
             Console.WriteLine($"no matches for '{query}'.");
+        WarnIfStaleSchema(doc.UserVersion);
         return ExitCode.Success;
     }
 

@@ -1,4 +1,5 @@
 using TestAtlas.Cli;
+using TestAtlas.Core.Storage;
 using Xunit;
 
 namespace TestAtlas.Tests;
@@ -93,6 +94,34 @@ public sealed class CliTests : IClassFixture<IndexedFixtureSolution>
     {
         var (code, _) = Capture(() => Commands.RunReport(new[] { "/no/such/map.db" }));
         Assert.Equal(ExitCode.BadArgs, code);
+    }
+
+    [Fact]
+    public void Report_notes_a_stale_schema_map()
+    {
+        using var temp = new TempDir();
+        var db = temp.File("old.db");
+        File.Copy(_fx.DbPath, db);
+        DowngradeUserVersion(db, MapSchema.Version - 1);
+
+        var html = temp.File("old.html");
+        var (code, stdout) = Capture(() => Commands.RunReport(new[] { db, "--html", html }));
+
+        Assert.Equal(ExitCode.Success, code); // still succeeds — it just annotates
+        Assert.Contains($"schema v{MapSchema.Version - 1}", stdout);
+        Assert.Contains("re-run `testatlas index`", stdout);
+        Assert.Contains("class=\"banner\"", File.ReadAllText(html)); // and the HTML carries the banner
+    }
+
+    private static void DowngradeUserVersion(string dbPath, int version)
+    {
+        using var conn = new Microsoft.Data.Sqlite.SqliteConnection(
+            new Microsoft.Data.Sqlite.SqliteConnectionStringBuilder { DataSource = dbPath, Pooling = false }.ToString());
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"PRAGMA user_version = {version};";
+        cmd.ExecuteNonQuery();
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
     }
 
     [Fact]
