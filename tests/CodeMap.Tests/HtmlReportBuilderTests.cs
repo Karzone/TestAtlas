@@ -181,6 +181,23 @@ public sealed class HtmlReportBuilderTests
     }
 
     [Fact]
+    public void Diagnostics_table_is_wrapped_so_long_messages_never_overflow_the_page()
+    {
+        var longPath = "Msbuild failed when processing the file " + new string('C', 200) + ".csproj";
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Diagnostics = new[] { new DiagnosticRow("warning", "nuget_missing_package", longPath, "X.csproj") },
+        };
+        var html = HtmlReportBuilder.Build(doc);
+
+        // The wide table sits in its own scroll container so the page body never scrolls sideways.
+        Assert.Contains("<div class=\"table-scroll\"><table class=\"grid diag\">", html);
+        Assert.Contains("</table></div></details>", html);
+        Assert.Contains(longPath, html); // message rendered in full (it wraps via CSS, not truncation)
+    }
+
+    [Fact]
     public void Handles_an_empty_map_without_throwing()
     {
         var html = HtmlReportBuilder.Build(new MapDocument { UserVersion = MapSchema.Version });
