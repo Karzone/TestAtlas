@@ -35,19 +35,18 @@ public sealed class SolutionIndexer
         var diagnostics = new List<DiagnosticEntity>();
         var hasher = new InputHasher();
 
+        // Raw load messages are captured here and only classified (severity + category) AFTER we
+        // know which projects actually yielded content — see the reclassification pass below.
+        var rawWorkspaceDiags = new List<(WorkspaceDiagnosticKind Kind, string Message)>();
+        var rawLock = new object();
+
         void Verbose(string m) => options.VerboseLog?.Invoke(m);
 
         using var workspace = MSBuildWorkspace.Create();
         workspace.WorkspaceFailed += (_, e) =>
         {
-            var severity = e.Diagnostic.Kind == WorkspaceDiagnosticKind.Failure
-                ? DiagnosticSeverity.Error
-                : DiagnosticSeverity.Warning;
-            diagnostics.Add(new DiagnosticEntity(
-                severity,
-                "workspace_load",
-                e.Diagnostic.Message,
-                Location: null));
+            lock (rawLock)
+                rawWorkspaceDiags.Add((e.Diagnostic.Kind, e.Diagnostic.Message));
         };
 
         IReadOnlyList<Project> csProjects;
@@ -106,6 +105,7 @@ public sealed class SolutionIndexer
             {
                 Name = project.Name,
                 Path = ToRelative(rootDir, project.FilePath),
+                FullPath = project.FilePath is { } fp ? SafeFullPath(fp) : string.Empty,
                 TargetFramework = ReadTargetFramework(project),
             };
 
@@ -125,6 +125,26 @@ public sealed class SolutionIndexer
             }
 
             projectHolders.Add(holder);
+        }
+
+        // ---- Reclassify workspace load messages now that we know which projects yielded content ----
+        var loadedWithContent = new HashSet<string>(
+            projectHolders.Where(h => h.Classes.Count > 0).Select(h => h.FullPath),
+            StringComparer.OrdinalIgnoreCase);
+
+        List<(WorkspaceDiagnosticKind Kind, string Message)> rawSnapshot;
+        lock (rawLock) rawSnapshot = rawWorkspaceDiags.ToList();
+
+        foreach (var (kind, message) in rawSnapshot)
+        {
+            var path = WorkspaceDiagnosticClassifier.ExtractProjectPath(message);
+            var loadedOk = path is not null && loadedWithContent.Contains(SafeFullPath(path));
+
+            var (code, severity) = WorkspaceDiagnosticClassifier.Classify(message, loadedOk);
+            if (kind == WorkspaceDiagnosticKind.Warning)
+                severity = DiagnosticSeverity.Warning; // a workspace warning never escalates to error
+
+            diagnostics.Add(new DiagnosticEntity(severity, code, message, path));
         }
 
         // ---- Assign deterministic IDs in canonical order ----
@@ -343,6 +363,12 @@ public sealed class SolutionIndexer
         catch { return string.Empty; }
     }
 
+    private static string SafeFullPath(string path)
+    {
+        try { return Path.GetFullPath(path); }
+        catch { return path; }
+    }
+
     private static bool IsSelected(Project project, IndexOptions options)
     {
         var name = project.Name;
@@ -366,6 +392,7 @@ public sealed class SolutionIndexer
     {
         public string Name = string.Empty;
         public string Path = string.Empty;
+        public string FullPath = string.Empty;
         public string? TargetFramework;
         public List<ClassHolder> Classes { get; } = new();
     }

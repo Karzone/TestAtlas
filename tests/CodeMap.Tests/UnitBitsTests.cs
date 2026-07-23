@@ -41,6 +41,68 @@ public sealed class MsBuildGuardTests
         => Assert.Null(MsBuildGuard.ParseNewestSdkDir(output));
 }
 
+public sealed class WorkspaceDiagnosticClassifierTests
+{
+    [Fact]
+    public void Missing_package_on_a_loaded_project_is_a_warning()
+    {
+        var (code, sev) = WorkspaceDiagnosticClassifier.Classify(
+            "Msbuild failed ... Unable to find package IG.Party.Dto. No packages exist ...",
+            projectLoadedWithContent: true);
+        Assert.Equal("nuget_missing_package", code);
+        Assert.Equal(DiagnosticSeverity.Warning, sev);
+    }
+
+    [Fact]
+    public void Vulnerability_advisory_is_a_warning_when_the_project_loaded()
+    {
+        var (code, sev) = WorkspaceDiagnosticClassifier.Classify(
+            "Package 'RestSharp' 106.6.9 has a known high severity vulnerability, https://…",
+            projectLoadedWithContent: true);
+        Assert.Equal("nuget_vulnerability", code);
+        Assert.Equal(DiagnosticSeverity.Warning, sev);
+    }
+
+    [Fact]
+    public void Orphan_reqnroll_codebehind_is_a_warning()
+    {
+        var (code, sev) = WorkspaceDiagnosticClassifier.Classify(
+            "For code-behind file 'X.feature.cs', no feature file was found. Set project property …",
+            projectLoadedWithContent: true);
+        Assert.Equal("reqnroll_orphan_codebehind", code);
+        Assert.Equal(DiagnosticSeverity.Warning, sev);
+    }
+
+    [Fact]
+    public void An_unreadable_project_file_is_an_error_even_if_others_loaded()
+    {
+        var (code, sev) = WorkspaceDiagnosticClassifier.Classify(
+            "The project file could not be loaded. The 'ItemGroup' start tag …",
+            projectLoadedWithContent: true);
+        Assert.Equal("project_load_failed", code);
+        Assert.Equal(DiagnosticSeverity.Error, sev);
+    }
+
+    [Fact]
+    public void A_diagnostic_on_a_project_that_did_not_load_is_an_error()
+    {
+        var (_, sev) = WorkspaceDiagnosticClassifier.Classify(
+            "Unable to find package Foo.", projectLoadedWithContent: false);
+        Assert.Equal(DiagnosticSeverity.Error, sev);
+    }
+
+    [Fact]
+    public void Extracts_the_csproj_path_from_a_message()
+        => Assert.Equal(
+            @"C:\repo\API\OneFAT.API.Party\OneFAT.API.Party.csproj",
+            WorkspaceDiagnosticClassifier.ExtractProjectPath(
+                @"Msbuild failed when processing the file 'C:\repo\API\OneFAT.API.Party\OneFAT.API.Party.csproj' with message: nope"));
+
+    [Fact]
+    public void Returns_no_path_when_there_is_no_csproj_quote()
+        => Assert.Null(WorkspaceDiagnosticClassifier.ExtractProjectPath("something without a project path"));
+}
+
 public sealed class GlobTests
 {
     [Theory]

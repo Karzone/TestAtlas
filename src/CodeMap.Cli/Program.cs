@@ -86,14 +86,17 @@ public static class Commands
         if (!quiet)
         {
             var errors = result.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
+            var warnings = result.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
             Console.WriteLine(
                 $"Indexed {result.Projects.Count} project(s): " +
                 $"{result.Classes.Count} class(es), {result.Methods.Count} method(s). " +
                 $"unbound steps: 0, ambiguous bindings: 0. " +
-                $"diagnostics: {result.Diagnostics.Count} ({errors} error(s)). " +
+                $"diagnostics: {result.Diagnostics.Count} ({errors} error(s), {warnings} warning(s)). " +
                 $"-> {output} ({sw.ElapsedMilliseconds} ms)");
             if (errors > 0)
-                Console.WriteLine("Completed with warnings — see diagnostics (`testatlas stats`).");
+                Console.WriteLine("Completed with warnings — some projects failed to load (see `testatlas stats`).");
+            else if (warnings > 0)
+                Console.WriteLine($"All projects loaded; {warnings} non-fatal warning(s) recorded (see `testatlas stats`).");
         }
 
         return result.Outcome switch
@@ -142,9 +145,25 @@ public static class Commands
         Console.WriteLine("ambiguous bindings: 0");
 
         var errors = doc.Diagnostics.Count(d => d.Severity == "error");
-        Console.WriteLine($"diagnostics: {doc.Diagnostics.Count} ({errors} error(s))");
-        foreach (var d in doc.Diagnostics)
-            Console.WriteLine($"  [{d.Severity}] {d.Code}: {d.Message}");
+        var warnings = doc.Diagnostics.Count(d => d.Severity == "warning");
+        Console.WriteLine($"diagnostics: {doc.Diagnostics.Count} ({errors} error(s), {warnings} warning(s))");
+
+        // Grouped summary by severity + code (errors first) — readable even at thousands of rows.
+        var groups = doc.Diagnostics
+            .GroupBy(d => (d.Severity, d.Code))
+            .Select(g => (g.Key.Severity, g.Key.Code, Count: g.Count()))
+            .OrderByDescending(g => g.Severity == "error")
+            .ThenByDescending(g => g.Count);
+        foreach (var g in groups)
+            Console.WriteLine($"  {g.Severity,-7} {g.Code,-26} {g.Count}");
+
+        // Then the actual error messages (capped), since those are the ones worth reading in full.
+        var errorRows = doc.Diagnostics.Where(d => d.Severity == "error").ToList();
+        const int cap = 20;
+        foreach (var d in errorRows.Take(cap))
+            Console.WriteLine($"    - {d.Message}");
+        if (errorRows.Count > cap)
+            Console.WriteLine($"    … and {errorRows.Count - cap} more error(s)");
 
         return ExitCode.Success;
     }
