@@ -7,8 +7,8 @@ namespace TestAtlas.Core.Storage;
 /// </summary>
 public static class MapSchema
 {
-    // v2 (slice 2a): adds the step_definitions table and real class/method kinds.
-    public const int Version = 2;
+    // v3 (slice 2b): adds features/scenarios/scenario_steps/edges + FTS5 search tables.
+    public const int Version = 3;
 
     /// <summary>DDL for a fresh map file. Ordered; safe to run inside one transaction.</summary>
     public const string CreateSql = """
@@ -63,6 +63,50 @@ public static class MapSchema
             line_start      INTEGER NOT NULL
         );
 
+        CREATE TABLE features (
+            id          INTEGER PRIMARY KEY,
+            project_id  INTEGER NOT NULL REFERENCES projects(id),
+            name        TEXT NOT NULL,
+            description TEXT,
+            tags        TEXT,
+            file_path   TEXT NOT NULL
+        );
+
+        CREATE TABLE scenarios (
+            id                INTEGER PRIMARY KEY,
+            feature_id        INTEGER NOT NULL REFERENCES features(id),
+            project_id        INTEGER NOT NULL REFERENCES projects(id),
+            name              TEXT NOT NULL,
+            kind              TEXT NOT NULL,
+            tags              TEXT,
+            example_row_count INTEGER NOT NULL,
+            file_path         TEXT NOT NULL,
+            line_start        INTEGER NOT NULL
+        );
+
+        CREATE TABLE scenario_steps (
+            id            INTEGER PRIMARY KEY,
+            scenario_id   INTEGER NOT NULL REFERENCES scenarios(id),
+            project_id    INTEGER NOT NULL REFERENCES projects(id),
+            keyword       TEXT NOT NULL,
+            text          TEXT NOT NULL,
+            ordinal       INTEGER NOT NULL,
+            has_docstring INTEGER NOT NULL,
+            has_table     INTEGER NOT NULL,
+            file_path     TEXT NOT NULL,
+            line_start    INTEGER NOT NULL
+        );
+
+        CREATE TABLE edges (
+            id         INTEGER PRIMARY KEY,
+            from_kind  TEXT NOT NULL,
+            from_id    INTEGER NOT NULL,
+            to_kind    TEXT NOT NULL,
+            to_id      INTEGER,
+            edge_kind  TEXT NOT NULL,
+            confidence TEXT
+        );
+
         CREATE TABLE diagnostics (
             id       INTEGER PRIMARY KEY AUTOINCREMENT,
             severity TEXT NOT NULL,
@@ -71,11 +115,18 @@ public static class MapSchema
             location TEXT
         );
 
+        CREATE VIRTUAL TABLE search_steps USING fts5(expression, method_name, class_name);
+        CREATE VIRTUAL TABLE search_scenarios USING fts5(feature_name, scenario_name, step_text, tags);
+
         CREATE INDEX ix_classes_project  ON classes(project_id);
         CREATE INDEX ix_methods_class    ON methods(class_id);
         CREATE INDEX ix_methods_project  ON methods(project_id);
         CREATE INDEX ix_stepdefs_method  ON step_definitions(method_id);
         CREATE INDEX ix_stepdefs_project ON step_definitions(project_id);
+        CREATE INDEX ix_scenarios_feature ON scenarios(feature_id);
+        CREATE INDEX ix_steps_scenario    ON scenario_steps(scenario_id);
+        CREATE INDEX ix_edges_from         ON edges(from_kind, from_id);
+        CREATE INDEX ix_edges_kind         ON edges(edge_kind);
         """;
 
     // meta keys

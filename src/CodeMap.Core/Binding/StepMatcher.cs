@@ -3,6 +3,9 @@ using System.Text.RegularExpressions;
 
 namespace TestAtlas.Core.Binding;
 
+/// <summary>A <see cref="StepBinding"/> with its expression precompiled to an anchored regex.</summary>
+public sealed record CompiledBinding(StepBinding Binding, Regex Pattern);
+
 /// <summary>The keyword a scenario step is spoken with, after And/But have been resolved.</summary>
 public enum StepKeyword
 {
@@ -115,22 +118,37 @@ public static class StepMatcher
     /// </summary>
     public static MatchResult Match(ScenarioStepInput step, IEnumerable<StepBinding> bindings)
     {
-        if (step is null) throw new ArgumentNullException(nameof(step));
         if (bindings is null) throw new ArgumentNullException(nameof(bindings));
+        // Compile on the fly (dropping ones that fail to compile), then match. For hot paths that
+        // reuse the same binding set across many steps, precompile once with Compile and use the
+        // compiled overload instead.
+        var compiled = bindings.Select(Compile).Where(c => c is not null).Select(c => c!).ToList();
+        return Match(step, compiled);
+    }
+
+    /// <summary>Precompile a binding to its anchored regex once, for reuse across many steps.</summary>
+    public static CompiledBinding? Compile(StepBinding binding)
+    {
+        if (binding is null) return null;
+        var regex = TryBuildRegex(binding);
+        return regex is null ? null : new CompiledBinding(binding, regex);
+    }
+
+    /// <summary>Match a step against precompiled bindings (the scalable path).</summary>
+    public static MatchResult Match(ScenarioStepInput step, IReadOnlyList<CompiledBinding> compiled)
+    {
+        if (step is null) throw new ArgumentNullException(nameof(step));
+        if (compiled is null) throw new ArgumentNullException(nameof(compiled));
 
         var text = step.Text ?? string.Empty;
         var matches = new List<BindingMatch>();
 
-        foreach (var binding in bindings)
+        foreach (var cb in compiled)
         {
-            if (!KeywordCompatible(binding.Keyword, step.Keyword))
+            if (!KeywordCompatible(cb.Binding.Keyword, step.Keyword))
                 continue;
 
-            var regex = TryBuildRegex(binding);
-            if (regex is null)
-                continue; // A malformed expression never crashes the matcher — it just can't match.
-
-            var m = regex.Match(text);
+            var m = cb.Pattern.Match(text);
             if (!m.Success)
                 continue;
 
@@ -141,7 +159,7 @@ public static class StepMatcher
                     parameters.Add(m.Groups[g].Value);
             }
 
-            matches.Add(new BindingMatch(binding, parameters));
+            matches.Add(new BindingMatch(cb.Binding, parameters));
         }
 
         var confidence = matches.Count switch

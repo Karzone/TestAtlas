@@ -118,12 +118,55 @@ public sealed record MapMeta(
 /// The full result of an indexing run: everything the SQLite writer needs, plus the
 /// <see cref="ExitCode"/> the CLI should return (spec §7 exit-code contract).
 /// </summary>
+/// <summary>A Gherkin feature (spec §5.1).</summary>
+public sealed record FeatureEntity(
+    int Id, int ProjectId, string Name, string Description, string Tags, string FilePath);
+
+/// <summary>A scenario or scenario outline (spec §5.1). <paramref name="Tags"/> are own + inherited.</summary>
+public sealed record ScenarioEntity(
+    int Id, int FeatureId, int ProjectId, string Name, string Kind, string Tags,
+    int ExampleRowCount, string FilePath, int LineStart);
+
+/// <summary>An ordered step within a scenario (spec §5.1).</summary>
+public sealed record ScenarioStepEntity(
+    int Id, int ScenarioId, int ProjectId, string Keyword, string Text, int Ordinal,
+    bool HasDocString, bool HasDataTable, string FilePath, int LineStart);
+
+/// <summary>Edge-kind vocabulary (spec §5.2).</summary>
+public static class EdgeKinds
+{
+    public const string BindsTo = "binds_to";
+    public const string Unbound = "unbound";
+}
+
+/// <summary>from/to entity-kind labels used in the edges table.</summary>
+public static class RefKinds
+{
+    public const string ScenarioStep = "scenario_step";
+    public const string StepDefinition = "step_definition";
+}
+
+/// <summary>binds_to confidence (spec §5.2).</summary>
+public static class BindConfidence
+{
+    public const string Exact = "exact";
+    public const string Ambiguous = "ambiguous";
+}
+
+/// <summary>An edge in the map graph (spec §5.2). <paramref name="ToId"/> is null for <c>unbound</c>.</summary>
+public sealed record EdgeEntity(
+    string FromKind, int FromId, string ToKind, int? ToId, string EdgeKind, string Confidence);
+
 public sealed record IndexResult(
     MapMeta Meta,
     IReadOnlyList<ProjectEntity> Projects,
     IReadOnlyList<ClassEntity> Classes,
     IReadOnlyList<MethodEntity> Methods,
     IReadOnlyList<StepDefinitionEntity> StepDefinitions,
+    IReadOnlyList<FeatureEntity> Features,
+    IReadOnlyList<ScenarioEntity> Scenarios,
+    IReadOnlyList<ScenarioStepEntity> ScenarioSteps,
+    IReadOnlyList<EdgeEntity> Edges,
     IReadOnlyList<DiagnosticEntity> Diagnostics,
     IndexOutcome Outcome);
 

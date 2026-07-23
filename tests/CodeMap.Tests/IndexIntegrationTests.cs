@@ -113,6 +113,94 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
+    public void Gherkin_features_scenarios_and_steps_are_extracted()
+    {
+        // 2 .feature files (Login + Checkout), 3 scenarios, 8 steps in source order.
+        Assert.Equal(2, _fx.Doc.Features.Count);
+        Assert.Equal(3, _fx.Doc.Scenarios.Count);
+        Assert.Equal(8, _fx.Doc.ScenarioSteps.Count);
+
+        var featureNames = _fx.Doc.Features.Select(f => f.Name).OrderBy(n => n).ToArray();
+        Assert.Equal(new[] { "Checkout", "Login" }, featureNames);
+
+        // Scenario tags round-trip from the .feature file.
+        var signIn = _fx.Doc.Scenarios.Single(s => s.Name == "Successful sign in");
+        Assert.Equal("@smoke", signIn.Tags);
+        var login = _fx.Doc.Features.Single(f => f.Name == "Login");
+        Assert.Equal(login.Id, signIn.FeatureId);
+
+        // The And keyword is preserved verbatim (resolution to Given/When/Then happens in the matcher).
+        Assert.Contains(_fx.Doc.ScenarioSteps, s => s.Keyword == "And" && s.Text == "pigs can fly");
+    }
+
+    [Fact]
+    public void Bound_step_links_to_its_step_definition()
+    {
+        var aliceStep = _fx.Doc.ScenarioSteps.Single(s => s.Text == "a user named Alice");
+        var edge = _fx.Doc.Edges.Single(e => e.FromKind == RefKinds.ScenarioStep && e.FromId == aliceStep.Id);
+
+        Assert.Equal(EdgeKinds.BindsTo, edge.EdgeKind);
+        Assert.Equal(BindConfidence.Exact, edge.Confidence);
+        Assert.Equal(RefKinds.StepDefinition, edge.ToKind);
+
+        var target = _fx.Doc.StepDefinitions.Single(d => d.Id == edge.ToId);
+        Assert.Equal("a user named (.*)", target.Expression); // the "And"/keyword-agnostic binding it resolves to
+    }
+
+    [Fact]
+    public void Unmatched_step_is_recorded_as_unbound()  // the deliberately-unbound "And pigs can fly"
+    {
+        var pigs = _fx.Doc.ScenarioSteps.Single(s => s.Text == "pigs can fly");
+        var edge = _fx.Doc.Edges.Single(e => e.FromKind == RefKinds.ScenarioStep && e.FromId == pigs.Id);
+
+        Assert.Equal(EdgeKinds.Unbound, edge.EdgeKind);
+        Assert.Null(edge.ToId);   // no step definition on the other end
+    }
+
+    [Fact]
+    public void Ambiguous_step_records_both_candidates_as_ambiguous()
+    {
+        // "the system is ready" matches BOTH "the system is ready" and "the system is (.*)".
+        var ready = _fx.Doc.ScenarioSteps.Single(s => s.Text == "the system is ready");
+        var edges = _fx.Doc.Edges.Where(e => e.FromKind == RefKinds.ScenarioStep && e.FromId == ready.Id).ToList();
+
+        Assert.Equal(2, edges.Count);
+        Assert.All(edges, e => Assert.Equal(EdgeKinds.BindsTo, e.EdgeKind));
+        Assert.All(edges, e => Assert.Equal(BindConfidence.Ambiguous, e.Confidence));
+
+        var expressions = edges
+            .Select(e => _fx.Doc.StepDefinitions.Single(d => d.Id == e.ToId).Expression)
+            .OrderBy(x => x)
+            .ToArray();
+        Assert.Equal(new[] { "the system is (.*)", "the system is ready" }, expressions);
+    }
+
+    [Fact]
+    public void Edge_tallies_match_the_fixture()
+    {
+        var bindsTo = _fx.Doc.Edges.Where(e => e.EdgeKind == EdgeKinds.BindsTo).ToList();
+        var exact = bindsTo.Count(e => e.Confidence == BindConfidence.Exact);
+        var ambiguous = bindsTo.Count(e => e.Confidence == BindConfidence.Ambiguous);
+        var unbound = _fx.Doc.Edges.Count(e => e.EdgeKind == EdgeKinds.Unbound);
+
+        Assert.Equal(6, exact);      // the six cleanly-resolved steps
+        Assert.Equal(2, ambiguous);  // the two candidates for "the system is ready"
+        Assert.Equal(1, unbound);    // "pigs can fly"
+    }
+
+    [Fact]
+    public void Fts5_search_over_step_definitions_finds_the_matching_row()
+    {
+        // Vacuity-proof: the FTS index resolves 'dashboard' to exactly the "the dashboard is shown" step def.
+        var hits = MapReader.SearchSteps(_fx.DbPath, "dashboard");
+        var dashboard = _fx.Doc.StepDefinitions.Single(d => d.Expression == "the dashboard is shown");
+        Assert.Equal(new[] { (long)dashboard.Id }, hits.ToArray());
+
+        // And it discriminates: a token in no step definition returns nothing.
+        Assert.Empty(MapReader.SearchSteps(_fx.DbPath, "zzzznope"));
+    }
+
+    [Fact]
     public void Method_signature_and_visibility_are_recorded()
     {
         var m = _fx.Doc.Methods.Single(x => x.Name == "GivenAUserNamed");

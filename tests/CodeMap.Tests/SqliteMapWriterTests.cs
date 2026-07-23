@@ -14,6 +14,10 @@ public sealed class SqliteMapWriterTests
         new[] { new ClassEntity(1, 1, "C", "N", "Base", Kinds.StepClass, "C.cs", 1, 3) },
         new[] { new MethodEntity(1, 1, 1, "M", "M()", "public", Kinds.StepDefinitionMethod, "C.cs", 2, 2) },
         new[] { new StepDefinitionEntity(1, 1, 1, 1, "Given", "a thing", ExpressionKinds.Regex, "", "C.cs", 2) },
+        new[] { new FeatureEntity(1, 1, "F", "desc", "@tag", "F.feature") },
+        new[] { new ScenarioEntity(1, 1, 1, "S", "scenario", "@tag", 0, "F.feature", 3) },
+        new[] { new ScenarioStepEntity(1, 1, 1, "Given", "a thing", 0, false, false, "F.feature", 4) },
+        new[] { new EdgeEntity(RefKinds.ScenarioStep, 1, RefKinds.StepDefinition, 1, EdgeKinds.BindsTo, BindConfidence.Exact) },
         Array.Empty<DiagnosticEntity>(),
         IndexOutcome.Success);
 
@@ -94,6 +98,13 @@ public sealed class SqliteMapWriterTests
         Assert.Equal("Given", s.Keyword);
         Assert.Equal("a thing", s.Expression);
         Assert.Equal(ExpressionKinds.Regex, s.ExpressionKind);
+        Assert.Single(doc.Features);
+        Assert.Single(doc.Scenarios);
+        var st = Assert.Single(doc.ScenarioSteps);
+        Assert.Equal("a thing", st.Text);
+        var e = Assert.Single(doc.Edges);
+        Assert.Equal(EdgeKinds.BindsTo, e.EdgeKind);
+        Assert.Equal(BindConfidence.Exact, e.Confidence);
         Assert.Equal("9.9.9", doc.Meta[MapSchema.MetaToolVersion]);
     }
 }

@@ -18,6 +18,20 @@ public sealed record ProjectRow(int Id, string Name, string Path, string? Target
 public sealed record StepDefinitionRow(int Id, int MethodId, int ClassId, int ProjectId, string Keyword,
     string Expression, string ExpressionKind, string? Parameters, string FilePath, int LineStart);
 
+/// <summary>A projected feature row.</summary>
+public sealed record FeatureRow(int Id, int ProjectId, string Name, string? Description, string? Tags, string FilePath);
+
+/// <summary>A projected scenario row.</summary>
+public sealed record ScenarioRow(int Id, int FeatureId, int ProjectId, string Name, string Kind, string? Tags,
+    int ExampleRowCount, string FilePath, int LineStart);
+
+/// <summary>A projected scenario-step row.</summary>
+public sealed record ScenarioStepRow(int Id, int ScenarioId, int ProjectId, string Keyword, string Text,
+    int Ordinal, bool HasDocString, bool HasDataTable, string FilePath, int LineStart);
+
+/// <summary>A projected edge row.</summary>
+public sealed record EdgeRow(string FromKind, int FromId, string ToKind, int? ToId, string EdgeKind, string? Confidence);
+
 /// <summary>A projected diagnostic row.</summary>
 public sealed record DiagnosticRow(string Severity, string Code, string Message, string? Location);
 
@@ -30,6 +44,10 @@ public sealed class MapDocument
     public IReadOnlyList<ClassRow> Classes { get; init; } = Array.Empty<ClassRow>();
     public IReadOnlyList<MethodRow> Methods { get; init; } = Array.Empty<MethodRow>();
     public IReadOnlyList<StepDefinitionRow> StepDefinitions { get; init; } = Array.Empty<StepDefinitionRow>();
+    public IReadOnlyList<FeatureRow> Features { get; init; } = Array.Empty<FeatureRow>();
+    public IReadOnlyList<ScenarioRow> Scenarios { get; init; } = Array.Empty<ScenarioRow>();
+    public IReadOnlyList<ScenarioStepRow> ScenarioSteps { get; init; } = Array.Empty<ScenarioStepRow>();
+    public IReadOnlyList<EdgeRow> Edges { get; init; } = Array.Empty<EdgeRow>();
     public IReadOnlyList<DiagnosticRow> Diagnostics { get; init; } = Array.Empty<DiagnosticRow>();
 }
 
@@ -56,6 +74,10 @@ public static class MapReader
             Classes = ReadClasses(conn),
             Methods = ReadMethods(conn),
             StepDefinitions = ReadStepDefinitions(conn),
+            Features = ReadFeatures(conn),
+            Scenarios = ReadScenarios(conn),
+            ScenarioSteps = ReadScenarioSteps(conn),
+            Edges = ReadEdges(conn),
             Diagnostics = ReadDiagnostics(conn),
         };
         SqliteConnection.ClearAllPools();
@@ -138,6 +160,23 @@ public static class MapReader
               .Append('|').Append(s.ProjectId).Append('|').Append(s.Keyword).Append('|').Append(s.Expression)
               .Append('|').Append(s.ExpressionKind).Append('|').Append(s.Parameters).Append('|')
               .Append(s.FilePath).Append('|').Append(s.LineStart).Append('\n');
+
+        foreach (var f in doc.Features)
+            sb.Append("feature|").Append(f.Id).Append('|').Append(f.ProjectId).Append('|').Append(f.Name)
+              .Append('|').Append(f.Tags).Append('|').Append(f.FilePath).Append('\n');
+
+        foreach (var s in doc.Scenarios)
+            sb.Append("scenario|").Append(s.Id).Append('|').Append(s.FeatureId).Append('|').Append(s.Name)
+              .Append('|').Append(s.Kind).Append('|').Append(s.Tags).Append('|').Append(s.ExampleRowCount)
+              .Append('|').Append(s.LineStart).Append('\n');
+
+        foreach (var s in doc.ScenarioSteps)
+            sb.Append("step|").Append(s.Id).Append('|').Append(s.ScenarioId).Append('|').Append(s.Keyword)
+              .Append('|').Append(s.Text).Append('|').Append(s.Ordinal).Append('|').Append(s.LineStart).Append('\n');
+
+        foreach (var e in doc.Edges)
+            sb.Append("edge|").Append(e.FromKind).Append('|').Append(e.FromId).Append('|').Append(e.ToKind)
+              .Append('|').Append(e.ToId).Append('|').Append(e.EdgeKind).Append('|').Append(e.Confidence).Append('\n');
 
         foreach (var d in doc.Diagnostics)
             sb.Append("diag|").Append(d.Severity).Append('|').Append(d.Code).Append('|')
@@ -227,6 +266,77 @@ public static class MapReader
                 r.GetString(4), r.GetString(5), r.GetString(6), r.IsDBNull(7) ? null : r.GetString(7),
                 r.GetString(8), r.GetInt32(9)));
         return list;
+    }
+
+    private static List<FeatureRow> ReadFeatures(SqliteConnection conn)
+    {
+        var list = new List<FeatureRow>();
+        if (!TableExists(conn, "features")) return list;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT id, project_id, name, description, tags, file_path FROM features ORDER BY id;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new FeatureRow(r.GetInt32(0), r.GetInt32(1), r.GetString(2),
+                r.IsDBNull(3) ? null : r.GetString(3), r.IsDBNull(4) ? null : r.GetString(4), r.GetString(5)));
+        return list;
+    }
+
+    private static List<ScenarioRow> ReadScenarios(SqliteConnection conn)
+    {
+        var list = new List<ScenarioRow>();
+        if (!TableExists(conn, "scenarios")) return list;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT id, feature_id, project_id, name, kind, tags, example_row_count, file_path, line_start FROM scenarios ORDER BY id;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new ScenarioRow(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetString(3), r.GetString(4),
+                r.IsDBNull(5) ? null : r.GetString(5), r.GetInt32(6), r.GetString(7), r.GetInt32(8)));
+        return list;
+    }
+
+    private static List<ScenarioStepRow> ReadScenarioSteps(SqliteConnection conn)
+    {
+        var list = new List<ScenarioStepRow>();
+        if (!TableExists(conn, "scenario_steps")) return list;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT id, scenario_id, project_id, keyword, text, ordinal, has_docstring, has_table, file_path, line_start FROM scenario_steps ORDER BY id;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new ScenarioStepRow(r.GetInt32(0), r.GetInt32(1), r.GetInt32(2), r.GetString(3), r.GetString(4),
+                r.GetInt32(5), r.GetInt32(6) != 0, r.GetInt32(7) != 0, r.GetString(8), r.GetInt32(9)));
+        return list;
+    }
+
+    private static List<EdgeRow> ReadEdges(SqliteConnection conn)
+    {
+        var list = new List<EdgeRow>();
+        if (!TableExists(conn, "edges")) return list;
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT from_kind, from_id, to_kind, to_id, edge_kind, confidence FROM edges ORDER BY id;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            list.Add(new EdgeRow(r.GetString(0), r.GetInt32(1), r.GetString(2),
+                r.IsDBNull(3) ? null : r.GetInt32(3), r.GetString(4), r.IsDBNull(5) ? null : r.GetString(5)));
+        return list;
+    }
+
+    /// <summary>FTS5 search over <c>search_steps</c> (spec §5.3 / A7). Returns matching step-def rowids.</summary>
+    public static IReadOnlyList<long> SearchSteps(string dbPath, string query)
+    {
+        var cs = new SqliteConnectionStringBuilder { DataSource = Path.GetFullPath(dbPath), Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
+        using var conn = new SqliteConnection(cs);
+        conn.Open();
+        var ids = new List<long>();
+        if (TableExists(conn, "search_steps"))
+        {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT rowid FROM search_steps WHERE search_steps MATCH $q ORDER BY rowid;";
+            var p = cmd.CreateParameter(); p.ParameterName = "$q"; p.Value = query; cmd.Parameters.Add(p);
+            using var r = cmd.ExecuteReader();
+            while (r.Read()) ids.Add(r.GetInt64(0));
+        }
+        SqliteConnection.ClearAllPools();
+        return ids;
     }
 
     private static List<DiagnosticRow> ReadDiagnostics(SqliteConnection conn)

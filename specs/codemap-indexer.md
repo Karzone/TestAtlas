@@ -211,6 +211,12 @@ Unknown config keys are a warning, not an error (forward compatibility).
 - `user_version = 1` — projects / classes / methods / diagnostics / meta (slice 1).
 - `user_version = 2` — adds the `step_definitions` table and populates real class/method `kind`
   values (slice 2a). Migration: re-run `codemap index`.
+- `user_version = 3` — adds the Gherkin side of the map (slice 2b): the `features`, `scenarios`,
+  and `scenario_steps` tables parsed from `.feature` files; the `edges` table carrying
+  `binds_to` (with `confidence` = `exact` | `ambiguous`) and `unbound` step→step-definition
+  links resolved by the matcher; and the FTS5 tables `search_steps` (step-definition
+  expression / method / class) and `search_scenarios` (feature / scenario / step text / tags).
+  Migration: re-run `codemap index`.
 
 ## 10. Performance targets
 

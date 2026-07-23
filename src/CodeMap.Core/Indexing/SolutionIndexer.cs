@@ -4,6 +4,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
+using TestAtlas.Core.Binding;
+using TestAtlas.Core.Features;
 using TestAtlas.Core.Model;
 using DiagnosticSeverity = TestAtlas.Core.Model.DiagnosticSeverity;
 
@@ -85,6 +87,10 @@ public sealed class SolutionIndexer
                 Array.Empty<ClassEntity>(),
                 Array.Empty<MethodEntity>(),
                 Array.Empty<StepDefinitionEntity>(),
+                Array.Empty<FeatureEntity>(),
+                Array.Empty<ScenarioEntity>(),
+                Array.Empty<ScenarioStepEntity>(),
+                Array.Empty<EdgeEntity>(),
                 diagnostics,
                 IndexOutcome.Fatal);
         }
@@ -128,6 +134,25 @@ public sealed class SolutionIndexer
                 if (File.Exists(docPath)) hasher.Add(relDoc, SafeRead(docPath));
 
                 await ExtractDocumentAsync(document, relDoc, holder, ct);
+            }
+
+            // Discover + parse .feature files under the project (spec §4/§5.1). Optional layer:
+            // a parse failure is a warning, never fatal (G4).
+            foreach (var featurePath in EnumerateFeatureFiles(projectDir))
+            {
+                ct.ThrowIfCancellationRequested();
+                var content = SafeRead(featurePath);
+                var relFeat = ToRelative(rootDir, featurePath);
+                hasher.Add(relFeat, content);
+
+                var parsed = GherkinFeatureParser.Parse(content);
+                if (parsed is null)
+                {
+                    diagnostics.Add(new DiagnosticEntity(DiagnosticSeverity.Warning, "feature_parse_error",
+                        $"Could not parse feature file '{featurePath}'.", relFeat));
+                    continue;
+                }
+                holder.Features.Add(new FeatureHolder { RelPath = relFeat, Parsed = parsed });
             }
 
             projectHolders.Add(holder);
@@ -189,10 +214,16 @@ public sealed class SolutionIndexer
         var classes = new List<ClassEntity>();
         var methods = new List<MethodEntity>();
         var stepDefs = new List<StepDefinitionEntity>();
+        var features = new List<FeatureEntity>();
+        var scenarios = new List<ScenarioEntity>();
+        var scenarioSteps = new List<ScenarioStepEntity>();
         var projectId = 0;
         var classId = 0;
         var methodId = 0;
         var stepDefId = 0;
+        var featureId = 0;
+        var scenarioId = 0;
+        var scenarioStepId = 0;
 
         foreach (var ph in projectHolders) // already ordered by (Name, Path)
         {
@@ -246,7 +277,38 @@ public sealed class SolutionIndexer
             projects.Add(new ProjectEntity(
                 pid, ph.Name, ph.Path, ph.TargetFramework, Classifier.SummariseProject(projClasses)));
             classes.AddRange(projClasses);
+
+            // Features / scenarios / scenario-steps (deterministic: by feature path, then file order).
+            foreach (var fh in ph.Features.OrderBy(f => f.RelPath, StringComparer.Ordinal))
+            {
+                featureId++;
+                var fid = featureId;
+                features.Add(new FeatureEntity(
+                    fid, pid, fh.Parsed.Name, fh.Parsed.Description, string.Join(" ", fh.Parsed.Tags), fh.RelPath));
+
+                foreach (var sc in fh.Parsed.Scenarios)
+                {
+                    scenarioId++;
+                    var sid = scenarioId;
+                    // Tag inheritance materialised (spec Q4): feature tags + the scenario's own tags.
+                    var scTags = string.Join(" ", fh.Parsed.Tags.Concat(sc.OwnTags));
+                    scenarios.Add(new ScenarioEntity(
+                        sid, fid, pid, sc.Name, sc.Kind, scTags, sc.ExampleRowCount, fh.RelPath, sc.Line));
+
+                    var ordinal = 0;
+                    foreach (var st in sc.Steps)
+                    {
+                        scenarioStepId++;
+                        scenarioSteps.Add(new ScenarioStepEntity(
+                            scenarioStepId, sid, pid, st.Keyword, st.Text, ordinal++,
+                            st.HasDocString, st.HasDataTable, fh.RelPath, st.Line));
+                    }
+                }
+            }
         }
+
+        // ---- binds_to: resolve each scenario step against its project's step definitions (spec §5.2) ----
+        var edges = BuildBindingEdges(stepDefs, scenarioSteps);
 
         // ---- Outcome (spec §7 exit-code contract) ----
         var loadedCount = selected.Count;
@@ -268,7 +330,84 @@ public sealed class SolutionIndexer
                 : IndexOutcome.Success;
 
         var meta = new MapMeta(ToolVersion, FormatUtc(_nowUtc()), fullPath, hasher.Compute());
-        return new IndexResult(meta, projects, classes, methods, stepDefs, diagnostics, outcome);
+        return new IndexResult(
+            meta, projects, classes, methods, stepDefs, features, scenarios, scenarioSteps, edges, diagnostics, outcome);
+    }
+
+    /// <summary>
+    /// Resolve each scenario step against its project's step definitions using the tested matcher,
+    /// producing binds_to (exact/ambiguous) and unbound edges (spec §5.2). Bindings are precompiled
+    /// once per project so this stays fast on large solutions; And/But keywords inherit the running
+    /// primary keyword within a scenario.
+    /// </summary>
+    private static List<EdgeEntity> BuildBindingEdges(
+        IReadOnlyList<StepDefinitionEntity> stepDefs, IReadOnlyList<ScenarioStepEntity> scenarioSteps)
+    {
+        var edges = new List<EdgeEntity>();
+        if (scenarioSteps.Count == 0) return edges;
+
+        var compiledByProject = stepDefs
+            .GroupBy(sd => sd.ProjectId)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Select(sd => StepMatcher.Compile(new StepBinding(
+                        ToBindingKeyword(sd.Keyword), sd.Expression, ToExpressionKind(sd.ExpressionKind), sd.Id.ToString())))
+                    .Where(c => c is not null).Select(c => c!).ToList());
+
+        var empty = new List<CompiledBinding>();
+
+        foreach (var scenarioGroup in scenarioSteps.GroupBy(s => s.ScenarioId))
+        {
+            StepKeyword? previousPrimary = null;
+            foreach (var step in scenarioGroup.OrderBy(s => s.Ordinal))
+            {
+                var keyword = StepKeywords.Resolve(step.Keyword, previousPrimary);
+                previousPrimary = keyword;
+
+                var compiled = compiledByProject.TryGetValue(step.ProjectId, out var list) ? list : empty;
+                var result = StepMatcher.Match(new ScenarioStepInput(keyword, step.Text), compiled);
+
+                if (result.Confidence == MatchConfidence.Unbound)
+                {
+                    edges.Add(new EdgeEntity(RefKinds.ScenarioStep, step.Id, RefKinds.StepDefinition, null, EdgeKinds.Unbound, ""));
+                    continue;
+                }
+
+                var confidence = result.Confidence == MatchConfidence.Ambiguous ? BindConfidence.Ambiguous : BindConfidence.Exact;
+                foreach (var match in result.Matches.OrderBy(m => int.Parse(m.Binding.Reference)))
+                    edges.Add(new EdgeEntity(
+                        RefKinds.ScenarioStep, step.Id, RefKinds.StepDefinition, int.Parse(match.Binding.Reference),
+                        EdgeKinds.BindsTo, confidence));
+            }
+        }
+
+        return edges;
+    }
+
+    private static BindingKeyword ToBindingKeyword(string keyword) => keyword switch
+    {
+        "Given" => BindingKeyword.Given,
+        "When" => BindingKeyword.When,
+        "Then" => BindingKeyword.Then,
+        _ => BindingKeyword.StepDefinition,
+    };
+
+    private static ExpressionKind ToExpressionKind(string kind)
+        => kind == ExpressionKinds.CucumberExpression ? ExpressionKind.CucumberExpression : ExpressionKind.Regex;
+
+    private static IEnumerable<string> EnumerateFeatureFiles(string projectDir)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(projectDir, "*.feature", SearchOption.AllDirectories)
+                .Where(f => !IsGeneratedOutput(projectDir, f))
+                .OrderBy(f => f, StringComparer.Ordinal)
+                .ToList();
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
     }
 
     private static async Task ExtractDocumentAsync(
@@ -481,6 +620,13 @@ public sealed class SolutionIndexer
         public string FullPath = string.Empty;
         public string? TargetFramework;
         public List<ClassHolder> Classes { get; } = new();
+        public List<FeatureHolder> Features { get; } = new();
+    }
+
+    private sealed class FeatureHolder
+    {
+        public string RelPath = string.Empty;
+        public ParsedFeature Parsed = null!;
     }
 
     private sealed class ClassHolder

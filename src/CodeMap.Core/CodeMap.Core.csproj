@@ -21,6 +21,8 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.11.0" />
     <!-- SQLite map writer. -->
     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.8" />
+    <!-- Official Cucumber Gherkin parser for .feature files (spec §4). -->
+    <PackageReference Include="Gherkin" Version="28.0.0" />
   </ItemGroup>
 
 </Project>

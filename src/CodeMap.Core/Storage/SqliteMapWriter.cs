@@ -90,7 +90,12 @@ public static class SqliteMapWriter
                 InsertClasses(conn, tx, result.Classes);
                 InsertMethods(conn, tx, result.Methods);
                 InsertStepDefinitions(conn, tx, result.StepDefinitions);
+                InsertFeatures(conn, tx, result.Features);
+                InsertScenarios(conn, tx, result.Scenarios);
+                InsertScenarioSteps(conn, tx, result.ScenarioSteps);
+                InsertEdges(conn, tx, result.Edges);
                 InsertDiagnostics(conn, tx, result.Diagnostics);
+                PopulateSearch(conn, tx, result);
 
                 tx.Commit();
             }
@@ -249,6 +254,120 @@ public static class SqliteMapWriter
             fp.Value = s.FilePath;
             ls.Value = s.LineStart;
             cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertFeatures(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<FeatureEntity> features)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "INSERT INTO features(id, project_id, name, description, tags, file_path) VALUES ($id,$pid,$n,$d,$t,$fp);";
+        var id = Add(cmd, "$id"); var pid = Add(cmd, "$pid"); var n = Add(cmd, "$n");
+        var d = Add(cmd, "$d"); var t = Add(cmd, "$t"); var fp = Add(cmd, "$fp");
+        foreach (var f in features)
+        {
+            id.Value = f.Id; pid.Value = f.ProjectId; n.Value = f.Name;
+            d.Value = (object?)f.Description ?? DBNull.Value; t.Value = (object?)f.Tags ?? DBNull.Value; fp.Value = f.FilePath;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertScenarios(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<ScenarioEntity> scenarios)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "INSERT INTO scenarios(id, feature_id, project_id, name, kind, tags, example_row_count, file_path, line_start) " +
+            "VALUES ($id,$fid,$pid,$n,$k,$t,$erc,$fp,$ls);";
+        var id = Add(cmd, "$id"); var fid = Add(cmd, "$fid"); var pid = Add(cmd, "$pid"); var n = Add(cmd, "$n");
+        var k = Add(cmd, "$k"); var t = Add(cmd, "$t"); var erc = Add(cmd, "$erc"); var fp = Add(cmd, "$fp"); var ls = Add(cmd, "$ls");
+        foreach (var s in scenarios)
+        {
+            id.Value = s.Id; fid.Value = s.FeatureId; pid.Value = s.ProjectId; n.Value = s.Name;
+            k.Value = s.Kind; t.Value = (object?)s.Tags ?? DBNull.Value; erc.Value = s.ExampleRowCount;
+            fp.Value = s.FilePath; ls.Value = s.LineStart;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertScenarioSteps(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<ScenarioStepEntity> steps)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "INSERT INTO scenario_steps(id, scenario_id, project_id, keyword, text, ordinal, has_docstring, has_table, file_path, line_start) " +
+            "VALUES ($id,$sid,$pid,$kw,$tx,$o,$ds,$tb,$fp,$ls);";
+        var id = Add(cmd, "$id"); var sid = Add(cmd, "$sid"); var pid = Add(cmd, "$pid"); var kw = Add(cmd, "$kw");
+        var txt = Add(cmd, "$tx"); var o = Add(cmd, "$o"); var ds = Add(cmd, "$ds"); var tb = Add(cmd, "$tb");
+        var fp = Add(cmd, "$fp"); var ls = Add(cmd, "$ls");
+        foreach (var s in steps)
+        {
+            id.Value = s.Id; sid.Value = s.ScenarioId; pid.Value = s.ProjectId; kw.Value = s.Keyword;
+            txt.Value = s.Text; o.Value = s.Ordinal; ds.Value = s.HasDocString ? 1 : 0; tb.Value = s.HasDataTable ? 1 : 0;
+            fp.Value = s.FilePath; ls.Value = s.LineStart;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    private static void InsertEdges(SqliteConnection conn, SqliteTransaction tx, IReadOnlyList<EdgeEntity> edges)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "INSERT INTO edges(id, from_kind, from_id, to_kind, to_id, edge_kind, confidence) VALUES ($id,$fk,$fi,$tk,$ti,$ek,$cf);";
+        var id = Add(cmd, "$id"); var fk = Add(cmd, "$fk"); var fi = Add(cmd, "$fi");
+        var tk = Add(cmd, "$tk"); var ti = Add(cmd, "$ti"); var ek = Add(cmd, "$ek"); var cf = Add(cmd, "$cf");
+        var n = 0;
+        foreach (var e in edges)
+        {
+            id.Value = ++n; fk.Value = e.FromKind; fi.Value = e.FromId; tk.Value = e.ToKind;
+            ti.Value = (object?)e.ToId ?? DBNull.Value; ek.Value = e.EdgeKind; cf.Value = (object?)e.Confidence ?? DBNull.Value;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// Populate the FTS5 search tables (spec §5.3): <c>search_steps</c> over step-definition text +
+    /// method/class names; <c>search_scenarios</c> over feature/scenario names + step text + tags.
+    /// rowids mirror the step-definition / scenario ids so consumers can join back.
+    /// </summary>
+    private static void PopulateSearch(SqliteConnection conn, SqliteTransaction tx, IndexResult result)
+    {
+        var methodName = result.Methods.ToDictionary(m => m.Id, m => m.Name);
+        var className = result.Classes.ToDictionary(c => c.Id, c => c.Name);
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO search_steps(rowid, expression, method_name, class_name) VALUES ($r,$e,$m,$c);";
+            var r = Add(cmd, "$r"); var e = Add(cmd, "$e"); var m = Add(cmd, "$m"); var c = Add(cmd, "$c");
+            foreach (var sd in result.StepDefinitions)
+            {
+                r.Value = sd.Id; e.Value = sd.Expression;
+                m.Value = methodName.TryGetValue(sd.MethodId, out var mn) ? mn : string.Empty;
+                c.Value = className.TryGetValue(sd.ClassId, out var cn) ? cn : string.Empty;
+                cmd.ExecuteNonQuery();
+            }
+        }
+
+        var featureName = result.Features.ToDictionary(f => f.Id, f => f.Name);
+        var stepsByScenario = result.ScenarioSteps
+            .GroupBy(s => s.ScenarioId)
+            .ToDictionary(g => g.Key, g => string.Join(" ", g.OrderBy(x => x.Ordinal).Select(x => x.Text)));
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText = "INSERT INTO search_scenarios(rowid, feature_name, scenario_name, step_text, tags) VALUES ($r,$f,$s,$t,$g);";
+            var r = Add(cmd, "$r"); var f = Add(cmd, "$f"); var s = Add(cmd, "$s"); var t = Add(cmd, "$t"); var g = Add(cmd, "$g");
+            foreach (var sc in result.Scenarios)
+            {
+                r.Value = sc.Id;
+                f.Value = featureName.TryGetValue(sc.FeatureId, out var fn) ? fn : string.Empty;
+                s.Value = sc.Name;
+                t.Value = stepsByScenario.TryGetValue(sc.Id, out var st) ? st : string.Empty;
+                g.Value = sc.Tags ?? string.Empty;
+                cmd.ExecuteNonQuery();
+            }
         }
     }
 

@@ -14,6 +14,10 @@ public sealed class DeterminismTests
         new[] { new ClassEntity(1, 1, className, "N", null, Kinds.Other, "C.cs", 1, 3) },
         Array.Empty<MethodEntity>(),
         Array.Empty<StepDefinitionEntity>(),
+        Array.Empty<FeatureEntity>(),
+        Array.Empty<ScenarioEntity>(),
+        Array.Empty<ScenarioStepEntity>(),
+        Array.Empty<EdgeEntity>(),
         Array.Empty<DiagnosticEntity>(),
         IndexOutcome.Success);
 

@@ -21,28 +21,31 @@ dotnet run --project src/CodeMap.Cli -- index samples/ReqnrollLoginDemo/LoginAut
 dotnet run --project src/CodeMap.Cli -- stats reqdemo.db
 ```
 
-### What the mapper produces (slice 2a)
+### What the mapper produces (slice 2b)
 
 ```
-Indexed 1 project(s): 3 class(es), 18 method(s), 5 step definition(s).
+Indexed 1 project(s): 1 class(es), 5 method(s), 5 step definition(s).
+gherkin: 1 feature(s), 2 scenario(s), 7 step(s) (6 bound, 1 unbound).
 diagnostics: 0 (0 error(s), 0 warning(s)).
 
 class kinds:
-  other       2
   step_class  1
 ```
 
 - **`LoginStepDefinitions`** → classified **`step_class`**, with its five real `[Given]/[When]/[Then]`
   cucumber-expression **step definitions** extracted (keyword + expression + `expression_kind`).
-- **`LoginFeature` / `FixtureData`** — Reqnroll's generated codebehind for `Login.feature` (the scenario
-  methods `SuccessfulSignIn()` / `LockedOutAfterFailures()` live here).
-- The generated `obj/**/xUnit.AssemblyHooks.cs` classes are **excluded** — slice 2a skips `obj/` and `bin/`.
+- **`Login.feature`** is parsed into one **feature**, two **scenarios**, and seven **scenario steps**,
+  persisted in the `features` / `scenarios` / `scenario_steps` tables.
+- Reqnroll's generated codebehind for `Login.feature` (`LoginFeature` / `FixtureData`) lives under
+  `obj/` and is **excluded** — the map indexes source, not generated artefacts.
 
-### Matcher resolution (from the tested `StepMatcher`)
+### Matcher resolution — now persisted as `edges` (slice 2b)
 
-`Login.feature`'s seven steps resolve to six `exact` bindings on `LoginStepDefinitions` and one `unbound`
-step (`And an unbound narrative step with no binding`). Persisting these as `binds_to` / `unbound` edges is
-slice 2b.
+`Login.feature`'s seven steps resolve to six `binds_to` (`exact`) edges on `LoginStepDefinitions` and one
+`unbound` edge (`And an unbound narrative step with no binding`). These now live in the `edges` table
+(`from` scenario step → `to` step definition, with `edge_kind` and `confidence`); `testatlas stats`
+reports the bound / unbound / ambiguous tallies. Steps are searchable via the FTS5 tables
+`search_steps` (step-definition text) and `search_scenarios` (feature / scenario / step text / tags).
 
 > The same two commands work on **any** local `.sln`/`.csproj` — e.g. a solution on your own machine that
 > this cloud sandbox can't reach.

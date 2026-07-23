@@ -87,10 +87,14 @@ public static class Commands
         {
             var errors = result.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Error);
             var warnings = result.Diagnostics.Count(d => d.Severity == DiagnosticSeverity.Warning);
+            var unbound = result.Edges.Count(e => e.EdgeKind == EdgeKinds.Unbound);
+            var bound = result.Edges.Where(e => e.EdgeKind == EdgeKinds.BindsTo).Select(e => e.FromId).Distinct().Count();
             Console.WriteLine(
                 $"Indexed {result.Projects.Count} project(s): " +
                 $"{result.Classes.Count} class(es), {result.Methods.Count} method(s), " +
                 $"{result.StepDefinitions.Count} step definition(s). " +
+                $"gherkin: {result.Features.Count} feature(s), {result.Scenarios.Count} scenario(s), " +
+                $"{result.ScenarioSteps.Count} step(s) ({bound} bound, {unbound} unbound). " +
                 $"diagnostics: {result.Diagnostics.Count} ({errors} error(s), {warnings} warning(s)). " +
                 $"-> {output} ({sw.ElapsedMilliseconds} ms)");
             if (errors > 0)
@@ -151,9 +155,16 @@ public static class Commands
         foreach (var g in kinds)
             Console.WriteLine($"  {g.Key,-14} {g.Count()}");
 
-        // Scenario steps + binds_to/unbound edges land in slice 2b, so these are still structurally zero.
-        Console.WriteLine("unbound steps: 0");
-        Console.WriteLine("ambiguous bindings: 0");
+        Console.WriteLine();
+        Console.WriteLine($"gherkin: {doc.Features.Count} feature(s), {doc.Scenarios.Count} scenario(s), {doc.ScenarioSteps.Count} step(s)");
+
+        var unbound = doc.Edges.Count(e => e.EdgeKind == EdgeKinds.Unbound);
+        var boundSteps = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.BindsTo).Select(e => e.FromId).Distinct().Count();
+        var ambiguousSteps = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.BindsTo && e.Confidence == BindConfidence.Ambiguous)
+            .Select(e => e.FromId).Distinct().Count();
+        Console.WriteLine($"bound steps: {boundSteps}");
+        Console.WriteLine($"unbound steps: {unbound}");
+        Console.WriteLine($"ambiguous bindings: {ambiguousSteps}");
 
         var errors = doc.Diagnostics.Count(d => d.Severity == "error");
         var warnings = doc.Diagnostics.Count(d => d.Severity == "warning");
