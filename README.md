@@ -46,7 +46,7 @@ TestAtlas statically analyses a .NET test-automation solution and emits a **sema
 | 💥 | **Impact** | Blast radius — the scenarios affected by changing a class, method, step, or endpoint |
 | 📊 | **Report** | A self-contained HTML drill-down of the whole map |
 | 🕸️ | **Map** | A self-contained project-dependency graph (HTML) |
-| 🤖 | **MCP** | Serve the map to an AI agent over stdio — no context stuffing |
+| 🔌 | **MCP** | Serve the map to an AI agent over stdio — no context stuffing |
 | 📈 | **Stats** | Entity counts, class-kind breakdown, binding coverage, diagnostics |
 
 All of it **offline, deterministic, and reproducible** — same input, same map, every time.
@@ -167,7 +167,7 @@ testatlas report atlas.db --html atlas.html
 
 ---
 
-## 🤖 Use it from an AI agent (MCP)
+## 🔌 Use it from an AI agent (MCP)
 
 TestAtlas ships an MCP server — `testatlas-mcp` — that serves the map to any MCP-aware client
 (Claude Code, and other agents) over stdio JSON-RPC. The agent asks a precise question and gets an
