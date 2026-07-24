@@ -72,39 +72,38 @@ answer those questions — deterministically, without a model or a network call.
 
 > **Requires** [.NET SDK 8.0+](https://dotnet.microsoft.com/download)
 
-```bash
-# Clone & build
-git clone https://github.com/Karzone/TestAtlas.git
-cd TestAtlas
-dotnet build TestAtlas.sln
+Install the CLI as a global .NET tool from NuGet:
 
+```bash
+dotnet tool install --global TestAtlas.Cli
+```
+
+…then, from any directory:
+
+```bash
 # Index a solution → produces ./codemap.db
-dotnet run --project src/CodeMap.Cli -- index path/to/YourSolution.sln
+testatlas index path/to/YourSolution.sln
 
 # Explore it
-dotnet run --project src/CodeMap.Cli -- stats
-dotnet run --project src/CodeMap.Cli -- search "login"
-dotnet run --project src/CodeMap.Cli -- report        # writes codemap.html
+testatlas stats
+testatlas search "login"
+testatlas report        # writes codemap.html
 ```
 
 Run `index` with no path and TestAtlas auto-discovers a single `.sln`/`.csproj` in the current
 directory. The map is written atomically to `./codemap.db`.
 
-### Install as a global tool
-
-The CLI packs as a .NET tool named `testatlas`:
-
-```bash
-dotnet pack src/CodeMap.Cli -c Release          # produces nupkg/TestAtlas.Cli.<version>.nupkg
-dotnet tool install --global --add-source ./nupkg TestAtlas.Cli
-```
-
-…so the workflow becomes just:
+<details>
+<summary><b>Or run from source</b> (no install)</summary>
 
 ```bash
-testatlas index path/to/YourSolution.sln
-testatlas search "cancel order" --steps
+git clone https://github.com/Karzone/TestAtlas.git
+cd TestAtlas
+dotnet build TestAtlas.sln
+dotnet run --project src/CodeMap.Cli -- index path/to/YourSolution.sln
 ```
+
+</details>
 
 ---
 
@@ -185,8 +184,7 @@ claude mcp add testatlas -- src/CodeMap.Mcp/bin/Release/net8.0/TestAtlas.Mcp.exe
 **Option B — install as a global tool** (`testatlas-mcp`), then register that:
 
 ```bash
-dotnet pack src/CodeMap.Mcp -c Release
-dotnet tool install --global --add-source ./nupkg TestAtlas.Mcp
+dotnet tool install --global TestAtlas.Mcp
 claude mcp add testatlas -- testatlas-mcp path/to/codemap.db
 ```
 
