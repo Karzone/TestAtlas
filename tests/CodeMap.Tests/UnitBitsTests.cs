@@ -1,5 +1,6 @@
 using TestAtlas.Core.Indexing;
 using TestAtlas.Core.Model;
+using TestAtlas.Core.Storage;
 using Xunit;
 
 namespace TestAtlas.Tests;
@@ -62,6 +63,16 @@ public sealed class ClassifierTests
             instMembers: 4, uiMembers: 4, refUi: true);
         Assert.Equal(Kinds.ApiClient, Classify(facts, n => n == "BaseApiService" ? Kinds.ApiClient : null));
     }
+
+    [Theory]
+    [InlineData("dashboard", "\"dashboard\"")]                                  // single term → quoted phrase
+    [InlineData("order via integration", "\"order\" \"via\" \"integration\"")]  // AND of quoted terms
+    [InlineData("GDV2013-NT015", "\"GDV2013-NT015\"")]                          // hyphen kept INSIDE quotes → no NOT operator
+    [InlineData("a \"b", "\"a\" \"b\"")]                                        // stray quote neutralised
+    [InlineData("   ", "")]                                                      // blank → empty (no MATCH runs)
+    [InlineData("--- :: ***", "")]                                             // punctuation-only → empty
+    public void ToFtsMatch_quotes_terms_so_any_input_is_safe(string input, string expected)
+        => Assert.Equal(expected, MapReader.ToFtsMatch(input));
 
     [Fact]
     public void A_static_class_is_never_a_page_object_or_api_client()

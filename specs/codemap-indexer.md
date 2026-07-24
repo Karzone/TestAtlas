@@ -180,7 +180,12 @@ Two FTS5 virtual tables, populated at index time:
 - `search_steps` — over step-definition expression text + method name + class name.
 - `search_scenarios` — over feature name + scenario name + step text + tags.
 
-These exist so downstream consumers (MCP server) get indexed lexical search for free.
+These exist so downstream consumers (MCP server) get indexed lexical search for free. Query text is
+**sanitised** before it hits FTS5 `MATCH`: each whitespace token is stripped of quotes and wrapped in
+double quotes (a literal phrase), so a hyphen / colon / `*` / unbalanced quote in the query is never
+mis-read as an FTS operator (raw, `GDV2013-NT015` throws *"no such column"*). Terms are AND-ed; a blank
+or punctuation-only query yields no rows, never an error — the search tools stay safe for arbitrary
+agent input.
 
 ## 6. Classification heuristics
 

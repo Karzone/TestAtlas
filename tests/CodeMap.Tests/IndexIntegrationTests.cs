@@ -343,6 +343,21 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
+    public void Fts_search_tolerates_special_characters_without_faulting()
+    {
+        // FTS5 query syntax treats a hyphen/colon/quote/* as an operator — raw, they throw ("no such
+        // column", "unterminated string") rather than returning no rows. Sanitisation makes any input
+        // safe: the MCP search tools depend on this so an agent's free-text query never faults.
+        var dashboard = _fx.Doc.StepDefinitions.Single(d => d.Expression == "the dashboard is shown");
+
+        // Terms present, punctuation neutralised → still finds the row (order-independent).
+        Assert.Contains((long)dashboard.Id, MapReader.SearchSteps(_fx.DbPath, "shown: \"dashboard"));
+        // Poison that used to throw now yields empty, no exception.
+        Assert.Empty(MapReader.SearchSteps(_fx.DbPath, "GDV2013-NT015"));  // valid syntax, just no match here
+        Assert.Empty(MapReader.SearchSteps(_fx.DbPath, "--- \"\""));       // punctuation / unbalanced quote
+    }
+
+    [Fact]
     public void Fts5_search_over_scenarios_finds_the_matching_scenario()
     {
         // 'dashboard' appears only in the "Successful sign in" scenario's step text.

@@ -365,20 +365,40 @@ public static class MapReader
 
     private static IReadOnlyList<long> SearchFts(string dbPath, string table, string query)
     {
+        var match = ToFtsMatch(query);
         var cs = new SqliteConnectionStringBuilder { DataSource = Path.GetFullPath(dbPath), Mode = SqliteOpenMode.ReadOnly, Pooling = false }.ToString();
         using var conn = new SqliteConnection(cs);
         conn.Open();
         var ids = new List<long>();
-        if (TableExists(conn, table))
+        // Empty after sanitisation (blank or punctuation-only) → no rows, never an error.
+        if (match.Length > 0 && TableExists(conn, table))
         {
             using var cmd = conn.CreateCommand();
             cmd.CommandText = $"SELECT rowid FROM {table} WHERE {table} MATCH $q ORDER BY rowid;";
-            var p = cmd.CreateParameter(); p.ParameterName = "$q"; p.Value = query; cmd.Parameters.Add(p);
+            var p = cmd.CreateParameter(); p.ParameterName = "$q"; p.Value = match; cmd.Parameters.Add(p);
             using var r = cmd.ExecuteReader();
             while (r.Read()) ids.Add(r.GetInt64(0));
         }
         SqliteConnection.ClearAllPools();
         return ids;
+    }
+
+    /// <summary>
+    /// Turn arbitrary user text into a safe FTS5 MATCH expression. FTS5 query syntax is picky — a bare
+    /// hyphen, colon, quote, <c>*</c>, or a reserved token is a *syntax error*, not "no match" (an agent
+    /// searching for <c>GDV2013-NT015</c> or an unbalanced quote would otherwise fault). Each whitespace
+    /// token is stripped of quotes and wrapped in double quotes, which FTS5 treats as a literal phrase, so
+    /// no character is ever interpreted as an operator; tokens with no letter/digit are dropped. Terms are
+    /// AND-ed (all must appear) — the sensible default for narrowing search.
+    /// </summary>
+    internal static string ToFtsMatch(string? query)
+    {
+        var tokens = (query ?? string.Empty)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => t.Replace("\"", " ").Trim())
+            .Where(t => t.Any(char.IsLetterOrDigit))
+            .Select(t => '"' + t + '"');
+        return string.Join(' ', tokens);
     }
 
     private static List<DiagnosticRow> ReadDiagnostics(SqliteConnection conn)
