@@ -14,11 +14,19 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>testatlas-mcp</ToolCommandName>
     <PackageId>TestAtlas.Mcp</PackageId>
+    <!-- Also advertise as an MCP server so NuGet.org lists it under MCP and clients (VS/VS Code)
+         can discover + install it. PackAsTool contributes the DotnetTool type; this adds McpServer. -->
+    <PackageType>McpServer</PackageType>
     <Description>TestAtlas MCP server (`testatlas-mcp`) — serves a TestAtlas semantic map of a .NET test-automation solution to an AI agent over stdio (hand-rolled JSON-RPC, zero MCP-SDK dependency). Read-only and offline. Exposes tools to search steps and scenarios, compute change impact, list endpoints, and read map stats — so an agent can navigate a test codebase without stuffing files into context.</Description>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\CodeMap.Core\CodeMap.Core.csproj" />
+  </ItemGroup>
+
+  <!-- MCP server manifest — packed at the package root under .mcp/ where NuGet clients look for it. -->
+  <ItemGroup>
+    <None Include=".mcp/server.json" Pack="true" PackagePath="/.mcp/" />
   </ItemGroup>
 
 </Project>

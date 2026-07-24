@@ -6,7 +6,7 @@
     Per-package <Description> lives in each project's own .csproj.
   -->
   <PropertyGroup>
-    <Version>0.1.0</Version>
+    <Version>0.1.1</Version>
     <Authors>Karthik Kalaiyarasu</Authors>
     <Company>Karthik Kalaiyarasu</Company>
     <Copyright>Copyright (c) 2026 Karthik Kalaiyarasu</Copyright>

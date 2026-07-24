@@ -174,7 +174,44 @@ TestAtlas ships an MCP server — `testatlas-mcp` — that serves the map to any
 exact, structured answer straight from the `.db` — instead of stuffing source files into its
 context window.
 
-**Option A — no install** (register the built binary directly):
+It's published on NuGet as an **MCP-server package** (`TestAtlas.Mcp`), so MCP-aware editors can
+discover and launch it. The map path is **optional** — the server auto-discovers a `codemap.db`
+(or `atlas.db`) in the working directory, or reads the `TESTATLAS_DB` environment variable.
+
+**Visual Studio / VS Code** (GitHub Copilot agent mode) — add to your `.mcp.json` (`%USERPROFILE%\.mcp.json`
+or `<SolutionDir>\.mcp.json`):
+
+```json
+{
+  "servers": {
+    "testatlas": {
+      "type": "stdio",
+      "command": "dnx",
+      "args": ["TestAtlas.Mcp", "--yes"]
+    }
+  }
+}
+```
+
+`dnx` (from the .NET 10 SDK) fetches and runs the server on demand — no pre-install. Launch it from a
+folder that holds your `codemap.db` and it's picked up automatically; otherwise append the path as a
+final arg. In Visual Studio you can also use **Tools picker → `+` → Add custom MCP server** to write
+this entry for you.
+
+**Claude Code** — install the global tool and register it:
+
+```bash
+dotnet tool install --global TestAtlas.Mcp
+claude mcp add testatlas -- testatlas-mcp        # run where a codemap.db lives, or append a path
+claude mcp list                                  # the testatlas row should read: ✔ Connected
+```
+
+By default the server is registered for the **current project** (`--scope local`). Add
+`--scope user` to make it available in every project on your machine, or `--scope project` to
+share the registration with your team via a committed `.mcp.json`.
+
+<details>
+<summary><b>Or run from source</b> (no install)</summary>
 
 ```bash
 dotnet build src/CodeMap.Mcp -c Release
@@ -182,23 +219,7 @@ dotnet build src/CodeMap.Mcp -c Release
 claude mcp add testatlas -- src/CodeMap.Mcp/bin/Release/net8.0/TestAtlas.Mcp.exe path/to/codemap.db
 ```
 
-**Option B — install as a global tool** (`testatlas-mcp`), then register that:
-
-```bash
-dotnet tool install --global TestAtlas.Mcp
-claude mcp add testatlas -- testatlas-mcp path/to/codemap.db
-```
-
-Verify it connected, then use it:
-
-```bash
-claude mcp list        # the testatlas row should read: ✔ Connected
-```
-
-By default the server is registered for the **current project** (`--scope local`). Add
-`--scope user` to make it available in every project on your machine, or `--scope project` to
-share the registration with your team via a committed `.mcp.json`. A user-scoped registration
-pins one `codemap.db`, so per-project registration is usually the better fit across many solutions.
+</details>
 
 **Tools exposed:**
 

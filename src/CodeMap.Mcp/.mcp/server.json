@@ -1,0 +1,21 @@
+{
+  "$schema": "https://modelcontextprotocol.io/schemas/draft/2025-07-09/server.json",
+  "description": "Serves a TestAtlas semantic map of a .NET test-automation solution to an AI agent over stdio — search steps and scenarios, compute change impact, list endpoints, and read map stats. Auto-discovers a codemap.db in the working directory (or set TESTATLAS_DB).",
+  "name": "io.github.Karzone/TestAtlas.Mcp",
+  "packages": [
+    {
+      "registry_name": "nuget",
+      "name": "TestAtlas.Mcp",
+      "version": "0.1.1",
+      "package_arguments": [],
+      "environment_variables": []
+    }
+  ],
+  "repository": {
+    "url": "https://github.com/Karzone/TestAtlas",
+    "source": "github"
+  },
+  "version_detail": {
+    "version": "0.1.1"
+  }
+}
