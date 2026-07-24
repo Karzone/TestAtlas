@@ -451,7 +451,13 @@ public static class HtmlReportBuilder
         foreach (var (ep, r) in shown)
         {
             var op = IsOperation(ep.Route);
-            sb.Append("<tr><td><span class=\"verb ").Append(VerbClass(ep.Verb)).Append("\">")
+            var expandable = r.ScenarioIds.Count > 0;
+            // The WHOLE row is the toggle when there are scenarios to reveal — a big click target, not a
+            // lone chevron. Rows with nothing bound stay inert.
+            sb.Append(expandable
+                ? "<tr class=\"ep-row\" aria-expanded=\"false\" onclick=\"toggleEp(this)\">"
+                : "<tr>");
+            sb.Append("<td><span class=\"verb ").Append(VerbClass(ep.Verb)).Append("\">")
               .Append(E(ep.Verb)).Append("</span></td>");
             // When the request type statically declared its route, show the real path with the request
             // type (and its API bucket) beneath; otherwise the route/type name alone.
@@ -468,15 +474,14 @@ public static class HtmlReportBuilder
             sb.Append("<td><span class=\"chip").Append(op ? " op" : "").Append("\">")
               .Append(op ? "operation" : "route").Append("</span></td>");
             sb.Append("<td class=\"num\">").Append(r.CallSiteCount).Append("</td>");
-            if (r.ScenarioIds.Count == 0)
+            if (!expandable)
             {
                 sb.Append("<td><span class=\"tag-unused\">none bound</span></td></tr>");
                 continue;
             }
-            // The scenarios cell becomes a toggle that reveals the detail row beneath it.
-            sb.Append("<td class=\"num\"><button type=\"button\" class=\"ep-exp\" aria-expanded=\"false\" onclick=\"toggleEp(this)\">")
+            sb.Append("<td class=\"num ep-scenarios\"><span class=\"ep-count\">")
               .Append(r.ScenarioIds.Count).Append(" scenario").Append(r.ScenarioIds.Count == 1 ? "" : "s")
-              .Append("<span class=\"ep-caret\">›</span></button></td></tr>");
+              .Append("</span><span class=\"ep-caret\" aria-hidden=\"true\">›</span></td></tr>");
 
             var scenarios = details.TryGetValue(ep.Id, out var sc) ? sc : Array.Empty<AffectedScenario>();
             AppendEndpointDetail(sb, scenarios);
@@ -712,11 +717,14 @@ public static class HtmlReportBuilder
         .unused-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;
         padding:4px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
         .u-name{font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
-        .ep-exp{font:inherit;color:var(--dim);background:none;border:0;padding:0;cursor:pointer;
-        font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:6px}
-        .ep-exp:hover{color:var(--ink)}
-        .ep-caret{display:inline-block;color:var(--faint);transition:transform .15s ease}
-        .ep-exp[aria-expanded="true"] .ep-caret{transform:rotate(90deg)}
+        tr.ep-row{cursor:pointer}
+        tr.ep-row:hover{background:color-mix(in srgb,var(--accent) 7%,transparent)}
+        tr.ep-row:hover .ep-count{color:var(--ink)}
+        .ep-scenarios{white-space:nowrap}
+        .ep-count{font-variant-numeric:tabular-nums}
+        .ep-caret{display:inline-block;color:var(--faint);margin-left:8px;transition:transform .15s ease}
+        tr.ep-row:hover .ep-caret{color:var(--ink)}
+        tr.ep-row[aria-expanded="true"] .ep-caret{transform:rotate(90deg)}
         .ep-det>td{background:var(--bg);padding:0}
         .ep-det-body{padding:14px 16px 16px}
         .ep-det-head{font-size:12px;color:var(--dim);margin:0 0 12px}
@@ -805,12 +813,12 @@ public static class HtmlReportBuilder
         function setAllFeatures(open){
           document.querySelectorAll('#tree > details.feature').forEach(function(f){f.open=open;});
         }
-        function toggleEp(btn){
-          var det=btn.closest('tr').nextElementSibling;
+        function toggleEp(row){
+          var det=row.nextElementSibling;
           if(!det||!det.classList.contains('ep-det'))return;
           var closed=det.hasAttribute('hidden');
           if(closed){det.removeAttribute('hidden');}else{det.setAttribute('hidden','');}
-          btn.setAttribute('aria-expanded',closed?'true':'false');
+          row.setAttribute('aria-expanded',closed?'true':'false');
         }
         """;
 }
