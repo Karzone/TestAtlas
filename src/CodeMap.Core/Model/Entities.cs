@@ -147,6 +147,7 @@ public static class EdgeKinds
     public const string Unbound = "unbound";
     public const string Inherits = "inherits";       // Class → Class (base type within the solution)
     public const string UsesType = "uses_type";      // Method → Class (constructs/receives/dereferences it)
+    public const string Holds = "holds";             // Class → Class (declares it as a field/property/return/param type)
     public const string CallsEndpoint = "calls_endpoint"; // Method → Endpoint (HTTP call in the body)
 }
 

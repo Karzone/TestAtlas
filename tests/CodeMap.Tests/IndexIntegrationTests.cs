@@ -289,6 +289,19 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
+    public void Holds_edge_links_a_class_to_a_collaborator_it_declares_as_a_field()
+    {
+        // LoginSteps declares a `LoginPage _loginPage` field — so it HOLDS LoginPage, the aggregator/DI
+        // signal a name-based construction scan misses (target-typed new() / injected field). This edge
+        // is what keeps a held-but-not-constructed collaborator out of the report's unused list.
+        var loginSteps = _fx.Doc.Classes.Single(c => c.Name == "LoginSteps");
+        var loginPage = _fx.Doc.Classes.Single(c => c.Name == "LoginPage");
+        Assert.Contains(_fx.Doc.Edges, e =>
+            e.EdgeKind == EdgeKinds.Holds && e.FromKind == RefKinds.Class && e.FromId == loginSteps.Id
+            && e.ToKind == RefKinds.Class && e.ToId == loginPage.Id);
+    }
+
+    [Fact]
     public void Structural_edge_tallies_match_the_fixture()
     {
         // Exactly one of each. Vacuity: the many shim classes deriving from System.Attribute — an

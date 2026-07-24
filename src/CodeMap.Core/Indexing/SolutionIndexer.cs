@@ -241,6 +241,7 @@ public sealed class SolutionIndexer
         // Structural-edge inputs, gathered as IDs are assigned (resolved after the loop, spec §5.2).
         var classInherits = new List<(int ClassId, string BaseName)>();
         var methodUses = new List<(int MethodId, int ClassId, HashSet<string> Names)>();
+        var classHolds = new List<(int ClassId, HashSet<string> Names)>(); // holds edges: class → collaborator field/property types
         var methodEndpointCalls = new List<(int MethodId, string Verb, string Route)>();
 
         foreach (var ph in projectHolders) // already ordered by (Name, Path)
@@ -268,6 +269,9 @@ public sealed class SolutionIndexer
 
                 if (ch.Facts?.BaseTypeName is { Length: > 0 } baseName)
                     classInherits.Add((cid, baseName));
+
+                if (ch.HeldTypeNames.Count > 0)
+                    classHolds.Add((cid, ch.HeldTypeNames));
 
                 var orderedMethods = ch.Methods
                     .OrderBy(m => m.Name, StringComparer.Ordinal)
@@ -350,7 +354,7 @@ public sealed class SolutionIndexer
         var edges = BuildBindingEdges(stepDefs, scenarioSteps);
 
         // ---- inherits / uses_type: the structural graph linking classes + their collaborators ----
-        edges.AddRange(BuildStructuralEdges(classes, classInherits, methodUses));
+        edges.AddRange(BuildStructuralEdges(classes, classInherits, methodUses, classHolds));
 
         // ---- endpoints: dedupe (verb, route) solution-wide; call sites become calls_endpoint edges ----
         var endpoints = methodEndpointCalls
@@ -458,7 +462,8 @@ public sealed class SolutionIndexer
     private static List<EdgeEntity> BuildStructuralEdges(
         IReadOnlyList<ClassEntity> classes,
         IReadOnlyList<(int ClassId, string BaseName)> classInherits,
-        IReadOnlyList<(int MethodId, int ClassId, HashSet<string> Names)> methodUses)
+        IReadOnlyList<(int MethodId, int ClassId, HashSet<string> Names)> methodUses,
+        IReadOnlyList<(int ClassId, HashSet<string> Names)> classHolds)
     {
         var edges = new List<EdgeEntity>();
 
@@ -466,7 +471,7 @@ public sealed class SolutionIndexer
             .GroupBy(c => c.Name, StringComparer.Ordinal)
             .ToDictionary(g => g.Key, g => g.Select(c => c.Id).OrderBy(i => i).ToList(), StringComparer.Ordinal);
 
-        // uses_type targets are deliberately limited to the collaborators the map is about — page
+        // uses_type / holds targets are deliberately limited to the collaborators the map is about — page
         // objects and API clients — which keeps the edge set signal-rich and bounded on huge solutions.
         var collaboratorIdsByName = classes
             .Where(c => c.Kind is Kinds.PageObject or Kinds.ApiClient)
@@ -498,6 +503,22 @@ public sealed class SolutionIndexer
             foreach (var (targetId, ambiguous) in targets)
                 edges.Add(new EdgeEntity(RefKinds.Method, methodId, RefKinds.Class, targetId, EdgeKinds.UsesType,
                     ambiguous ? BindConfidence.Ambiguous : BindConfidence.Exact));
+        }
+
+        // holds: a class declares a collaborator as a field/property/return/param type. Captures the
+        // aggregator/DI shape (`WorkflowApiService Workflow { get; } = new(context);`) that a name-based
+        // construction scan misses — target-typed `new()` has no type name, but the member's declared type
+        // does. This is the "referenced / live" signal that separates held collaborators from the genuinely
+        // orphaned (reached by nothing) in the report's unused list.
+        foreach (var (classId, names) in classHolds)
+        {
+            var targets = new SortedSet<int>();
+            foreach (var name in names)
+                if (collaboratorIdsByName.TryGetValue(name, out var ids))
+                    foreach (var id in ids.Where(id => id != classId)) // never a self-edge
+                        targets.Add(id);
+            foreach (var targetId in targets)
+                edges.Add(new EdgeEntity(RefKinds.Class, classId, RefKinds.Class, targetId, EdgeKinds.Holds, BindConfidence.Exact));
         }
 
         return edges
@@ -553,6 +574,7 @@ public sealed class SolutionIndexer
                     BaseType = type.BaseList?.Types.FirstOrDefault()?.Type.ToString(),
                     Facts = SyntaxScan.GatherClassFacts(type),
                     RequestEndpoint = SyntaxScan.RequestEndpointOf(type),
+                    HeldTypeNames = SyntaxScan.HeldTypeNames(type),
                     FilePath = relDoc,
                     LineStart = tree.GetLineSpan(type.Identifier.Span).StartLinePosition.Line + 1,
                     LineEnd = tree.GetLineSpan(type.Span).EndLinePosition.Line + 1,
@@ -764,6 +786,7 @@ public sealed class SolutionIndexer
         public string Kind = Kinds.Other;
         public ClassFacts? Facts;
         public (string Verb, string Route, string? TargetApi)? RequestEndpoint; // set when the type is a request descriptor
+        public HashSet<string> HeldTypeNames = new(StringComparer.Ordinal); // collaborators held as field/property/return/param types
         public string FilePath = string.Empty;
         public int LineStart;
         public int LineEnd;

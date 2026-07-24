@@ -144,6 +144,7 @@ A single `edges` table: `(from_kind, from_id, to_kind, to_id, edge_kind, confide
 | `unbound` | ScenarioStep → ∅ | Recorded as a diagnostic row; no matching binding found |
 | `calls` | Method → Method | Direct invocation found by Roslyn (single hop; consumers can walk the graph for transitive reach) |
 | `uses_type` | Method → Class | Method constructs, receives, or dereferences the class (how step classes reach page objects/API clients) |
+| `holds` | Class → Class | Class declares the collaborator as a field/property/return/param type — the aggregator/DI shape a name-based `new TypeName()` scan misses (target-typed `new()`, injected fields). The "referenced somewhere" signal, bounded to collaborator targets |
 | `inherits` | Class → Class | Base-type relationship within the solution |
 | `calls_endpoint` | Method → Endpoint | The method makes an HTTP call to the endpoint (route template) |
 
@@ -311,11 +312,14 @@ of the endpoints panel's blast radius: a scenario lists an endpoint iff that end
 scenario, since both read the one `EndpointReachAll` pass), and a
 diagnostics table, a **collaborators** panel (page objects / API clients ranked by how many
 distinct methods drive them via `uses_type`, with the base class from `inherits`; a collaborator is
-**used** when a method drives it *or* something inherits it — an abstract base like `BaseApiService`
-shows its subclass count, not an unused flag, since inheritance is real use that `uses_type` alone
-misses — and the genuinely **unused** ones, driven by nothing and inherited by nothing, are listed in
-an expandable section so the count is inspectable rather than opaque; a class reached only via
-DI/reflection can still be a false positive that no syntax-only pass can see), and an **API endpoints** panel (routes + operations the suite calls,
+**used** when a method drives it, something inherits it, *or* a class **holds** it (declares it as a
+field/property/return/param type) — an abstract base like `BaseApiService` shows its subclass count and
+a held-but-not-directly-driven service shows a `held` tag, neither an unused flag, since inheritance and
+the aggregator/DI holding are real use that `uses_type` alone misses (the latter is the target-typed
+`new()` shape a name-based scan can't see) — and the genuinely **unused** ones, referenced by nothing at
+all, are listed in an expandable section so the count is inspectable rather than opaque; a class reached
+only via reflection/`typeof` registries can still be a false positive that no syntax-only pass can see),
+and an **API endpoints** panel (routes + operations the suite calls,
 each with a colour-coded verb badge, a route/operation kind chip, its call-site count, and its
 reverse **blast radius** — how many scenarios reach it, via `EndpointReachAll`). The scenarios count is
 an **expandable toggle**: opening a row reveals the reached scenarios grouped by feature, each with the

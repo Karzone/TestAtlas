@@ -203,6 +203,27 @@ public sealed class EndpointScanTests
         Assert.Equal(("BaseRequest", "GetSupplierRequest"), Assert.Single(SyntaxScan.GenericOperationCandidates(method2)));
     }
 
+    [Fact]
+    public void Held_type_names_cover_field_property_return_and_param_types()
+    {
+        // The aggregator/DI shape a name-based construction scan misses: the collaborator is the member's
+        // DECLARED type, even when the target-typed new() carries no type name.
+        var type = CSharpSyntaxTree.ParseText("""
+            class GatewayApiService
+            {
+                private readonly WorkflowApiService _workflow;                    // DI field
+                public MotorOrderApiService MotorOrder { get; } = new(context);   // target-typed new() property
+                public SupplierProfilePage GetPage(LookupApiService lookup) => null; // return + param types
+            }
+            """).GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>().First();
+
+        var held = SyntaxScan.HeldTypeNames(type);
+        Assert.Contains("WorkflowApiService", held);   // field type
+        Assert.Contains("MotorOrderApiService", held); // property type — the target-typed new() case
+        Assert.Contains("SupplierProfilePage", held);  // return type
+        Assert.Contains("LookupApiService", held);     // parameter type
+    }
+
     // ---- request descriptors: route/verb/API read from the request type's getters (slice 5) ---------
 
     private static (string Verb, string Route, string? TargetApi)? RequestEndpoint(string classSrc)

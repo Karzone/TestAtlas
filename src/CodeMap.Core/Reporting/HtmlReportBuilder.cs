@@ -340,7 +340,15 @@ public static class HtmlReportBuilder
             .ToDictionary(g => g.Key, g => g.Select(e => e.FromId).Distinct().Count());
         var inheritedIds = subclassesByBase.Keys.ToHashSet();
 
-        bool IsUsed(ClassRow c) => driversByClass.ContainsKey(c.Id) || inheritedIds.Contains(c.Id);
+        // …and when a class HOLDS it as a field/property/return/param type — the aggregator/DI shape a
+        // name-based construction scan can't see (target-typed `new()`, injected fields). A holds edge is
+        // the "referenced somewhere" signal that separates a live-but-not-directly-driven collaborator
+        // from a genuinely orphaned one.
+        var heldIds = doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.Holds && e.ToId is int)
+            .Select(e => e.ToId!.Value).ToHashSet();
+
+        bool IsUsed(ClassRow c) => driversByClass.ContainsKey(c.Id) || inheritedIds.Contains(c.Id) || heldIds.Contains(c.Id);
 
         var pageObjects = collaborators.Count(c => c.Kind == Kinds.PageObject);
         var apiClients = collaborators.Count(c => c.Kind == Kinds.ApiClient);
@@ -374,6 +382,8 @@ public static class HtmlReportBuilder
                 sb.Append("<td class=\"num\">").Append(drivers).Append(" method").Append(drivers == 1 ? "" : "s").Append("</td>");
             else if (subclassesByBase.TryGetValue(c.Id, out var subs))
                 sb.Append("<td class=\"num\">").Append(subs).Append(" subclass").Append(subs == 1 ? "" : "es").Append("</td>");
+            else if (heldIds.Contains(c.Id))
+                sb.Append("<td><span class=\"tag-held\">held</span></td>"); // referenced as a field/property type, not directly driven
             else
                 sb.Append("<td><span class=\"tag-unused\">unused</span></td>");
             var bases = extendsByClass.TryGetValue(c.Id, out var b) ? string.Join(", ", b) : "";
@@ -707,6 +717,8 @@ public static class HtmlReportBuilder
         .tag-unused{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--amber);
         background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid var(--amber);
         border-radius:20px;padding:1px 9px}
+        .tag-held{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--dim);
+        background:var(--bg);border:1px solid var(--line);border-radius:20px;padding:1px 9px}
         .unused-sec{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
         .unused-sec>summary{cursor:pointer;list-style:none;font-size:12.5px;color:var(--dim)}
         .unused-sec>summary::-webkit-details-marker{display:none}

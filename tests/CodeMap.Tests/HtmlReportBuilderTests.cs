@@ -150,6 +150,30 @@ public sealed class HtmlReportBuilderTests
     }
 
     [Fact]
+    public void A_held_collaborator_is_not_unused_even_when_no_method_drives_it()
+    {
+        // GatewayApiService holds WorkflowApiService as a field/property (aggregator/DI) — no method
+        // constructs it by name, so pre-holds the report flagged it unused. The holds edge un-flags it.
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Classes = new[]
+            {
+                new ClassRow(1, 1, "GatewayApiService", "N", null, Kinds.ApiClient, "G.cs", 1, 9),
+                new ClassRow(2, 1, "WorkflowApiService", "N", null, Kinds.ApiClient, "W.cs", 1, 9),
+                new ClassRow(3, 1, "DeadService", "N", null, Kinds.ApiClient, "D.cs", 1, 9),
+            },
+            Edges = new[] { new EdgeRow(RefKinds.Class, 1, RefKinds.Class, 2, EdgeKinds.Holds, BindConfidence.Exact) },
+        };
+        var html = HtmlReportBuilder.Build(doc);
+
+        Assert.Contains("tag-held", html);                             // the held collaborator is tagged, not unused
+        var unused = Between(html, "<details class=\"unused-sec\">", "</details>");
+        Assert.DoesNotContain("WorkflowApiService", unused);           // held → not in the unused list
+        Assert.Contains("u-name\">DeadService<", unused);              // the genuinely orphaned one still is
+    }
+
+    [Fact]
     public void Unused_collaborators_are_listed_so_they_can_be_seen()
     {
         var html = HtmlReportBuilder.Build(DocWithCollaborators());

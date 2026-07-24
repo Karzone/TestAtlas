@@ -198,6 +198,32 @@ internal static class SyntaxScan
         return map;
     }
 
+    /// <summary>
+    /// The simple type-names a type <b>holds or exposes</b> in its member signatures: field and property
+    /// declared types, method return types, and method parameter types. This is the structural-reference
+    /// signal a name-based construction scan misses — an aggregator holds a service as
+    /// <c>WorkflowApiService Workflow { get; } = new(context);</c>, whose declared type is the collaborator
+    /// even though the target-typed <c>new()</c> carries no type name; likewise a DI-injected
+    /// <c>readonly SupplierApiService _svc</c>. Lets the report tell "held/used somewhere" from "genuinely
+    /// orphaned" (referenced by nothing), instead of only seeing <c>new TypeName()</c> in method bodies.
+    /// </summary>
+    public static HashSet<string> HeldTypeNames(TypeDeclarationSyntax type)
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        void AddAll(TypeSyntax? t) { foreach (var n in TypeIdentifiers(t)) names.Add(n); }
+        foreach (var m in type.Members)
+            switch (m)
+            {
+                case FieldDeclarationSyntax f: AddAll(f.Declaration.Type); break;
+                case PropertyDeclarationSyntax p: AddAll(p.Type); break;
+                case MethodDeclarationSyntax md:
+                    AddAll(md.ReturnType);
+                    foreach (var par in md.ParameterList.Parameters) AddAll(par.Type);
+                    break;
+            }
+        return names;
+    }
+
     /// <summary>All simple identifier names within a type syntax (the type itself + any generic args).</summary>
     private static IEnumerable<string> TypeIdentifiers(TypeSyntax? type)
     {
