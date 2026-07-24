@@ -203,6 +203,31 @@ public sealed class EndpointScanTests
         Assert.Equal(("BaseRequest", "GetSupplierRequest"), Assert.Single(SyntaxScan.GenericOperationCandidates(method2)));
     }
 
+    private static TypeDeclarationSyntax ParseClass(string src)
+        => CSharpSyntaxTree.ParseText(src).GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>().First();
+
+    [Fact]
+    public void A_member_merely_named_like_a_ui_marker_is_not_a_ui_reference()
+    {
+        // The collision the type-position rule fixes: `By` is a Selenium marker type, but a property
+        // NAMED By (an ApiService building filters with `By = "name"`) must not count as a UI reference
+        // and flip the class to page_object.
+        var facts = SyntaxScan.GatherClassFacts(ParseClass("""
+            class FilterApiService
+            {
+                public string By { get; set; }         // property NAMED By — not a type
+                public void Build() { By = "name"; }    // assignment — expression position
+            }
+            """));
+        Assert.False(facts.ReferencesUiType);
+        Assert.Equal(0, facts.UiReferencingMembers);
+
+        // …but `By` in a TYPE position (a parameter type) genuinely is a UI reference.
+        var real = SyntaxScan.GatherClassFacts(ParseClass("class LocatorHelper { public void Click(By by) { } }"));
+        Assert.True(real.ReferencesUiType);
+        Assert.Equal(1, real.UiReferencingMembers);
+    }
+
     [Fact]
     public void Held_type_names_cover_field_property_return_and_param_types()
     {

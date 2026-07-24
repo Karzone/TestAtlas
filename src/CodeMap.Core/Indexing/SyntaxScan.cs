@@ -593,9 +593,44 @@ internal static class SyntaxScan
         _ => false,
     };
 
+    /// <summary>
+    /// True when a marker type name appears in a <b>type position</b> under the node — a field/property/
+    /// parameter/return/local/base type, a generic type argument, or the type of a <c>new</c>/<c>typeof</c>/
+    /// cast/<c>is</c>/<c>as</c>/<c>foreach</c>. It deliberately does NOT match a bare identifier in an
+    /// expression position, so a property or variable merely <i>named</i> <c>By</c> or <c>Component</c>
+    /// no longer collides with Selenium's <c>By</c> marker and flips a class's kind. Syntax-only (no
+    /// semantic model, to hold up on unrestored projects); the bias is conservative — a static-member
+    /// access like <c>By.Id(…)</c> is not counted, which risks a miss, never a misclassification.
+    /// </summary>
     private static bool ReferencesAny(SyntaxNode node, HashSet<string> markers)
-        => node.DescendantNodes().OfType<IdentifierNameSyntax>()
-            .Any(id => markers.Contains(id.Identifier.ValueText));
+    {
+        foreach (var type in TypePositionTypes(node))
+            foreach (var name in TypeIdentifiers(type))
+                if (markers.Contains(name)) return true;
+        return false;
+    }
+
+    /// <summary>Every <see cref="TypeSyntax"/> that sits in a genuine type slot under the node.</summary>
+    private static IEnumerable<TypeSyntax> TypePositionTypes(SyntaxNode node)
+    {
+        foreach (var n in node.DescendantNodesAndSelf())
+            switch (n)
+            {
+                case VariableDeclarationSyntax v: yield return v.Type; break;      // fields + locals
+                case PropertyDeclarationSyntax p: yield return p.Type; break;
+                case ParameterSyntax { Type: { } pt }: yield return pt; break;
+                case MethodDeclarationSyntax m: yield return m.ReturnType; break;
+                case BaseTypeSyntax b: yield return b.Type; break;                 // base list
+                case ObjectCreationExpressionSyntax oc: yield return oc.Type; break; // new T()
+                case TypeOfExpressionSyntax to: yield return to.Type; break;       // typeof(T)
+                case CastExpressionSyntax c: yield return c.Type; break;           // (T)x
+                case ForEachStatementSyntax fe: yield return fe.Type; break;
+                case BinaryExpressionSyntax be
+                    when (be.IsKind(SyntaxKind.IsExpression) || be.IsKind(SyntaxKind.AsExpression))
+                         && be.Right is TypeSyntax rt:
+                    yield return rt; break;
+            }
+    }
 
     private static string? FirstStringArgument(AttributeSyntax attr)
     {

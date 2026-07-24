@@ -200,6 +200,14 @@ the greedy UI-ratio rule would otherwise claim.
 (it holds no state and is never `new`-ed), so it skips every rule below even when it references
 RestSharp/UI types — a static RestSharp helper is a helper, not a client.
 
+**Marker types are matched in TYPE positions only.** A UI/API marker (`By`, `IWebDriver`, `HttpClient`,
+…) counts as a reference only when the name sits in a genuine type slot — a field/property/parameter/
+return/local/base type, a generic type argument, or the type of a `new`/`typeof`/cast/`is`/`as`/
+`foreach`. A bare identifier in an expression position (a property or variable merely *named* `By`,
+`By = "name"`) does **not** count. Syntax-only (no semantic model, to hold up on unrestored projects),
+biased conservative: a static-member access like `By.Id(…)` is not counted — risking a miss, never the
+misclassification that a name collision would cause (`By`/`Component` are common ordinary identifiers).
+
 **Page object** — any of, in order:
 
 1. ≥ 50% of instance members reference Playwright (`IPage`, `ILocator`) or Selenium
