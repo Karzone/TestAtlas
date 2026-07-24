@@ -330,13 +330,28 @@ public static class HtmlReportBuilder
             .GroupBy(e => e.FromId)
             .ToDictionary(g => g.Key, g => g.Select(e => classNameById[e.ToId!.Value]).OrderBy(n => n, StringComparer.Ordinal).ToList());
 
+        // A collaborator is also "used" when something INHERITS it: an abstract base (BaseApiService,
+        // BasePage) that nothing constructs directly is still live through its subclasses. Counting only
+        // uses_type would flag it dead — a false positive. subclassesByBase powers a "N subclasses" cell
+        // for such bases, and inheritedIds keeps them out of the unused list.
+        var subclassesByBase = doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.Inherits && e.ToId is int)
+            .GroupBy(e => e.ToId!.Value)
+            .ToDictionary(g => g.Key, g => g.Select(e => e.FromId).Distinct().Count());
+        var inheritedIds = subclassesByBase.Keys.ToHashSet();
+
+        bool IsUsed(ClassRow c) => driversByClass.ContainsKey(c.Id) || inheritedIds.Contains(c.Id);
+
         var pageObjects = collaborators.Count(c => c.Kind == Kinds.PageObject);
         var apiClients = collaborators.Count(c => c.Kind == Kinds.ApiClient);
-        var orphans = collaborators.Count(c => !driversByClass.ContainsKey(c.Id));
+        var unusedList = collaborators.Where(c => !IsUsed(c))
+            .OrderBy(c => c.Kind, StringComparer.Ordinal).ThenBy(c => c.Name, StringComparer.Ordinal).ToList();
+        var orphans = unusedList.Count;
 
         var ranked = collaborators
             .Select(c => (Class: c, Drivers: driversByClass.TryGetValue(c.Id, out var d) ? d : 0))
             .OrderByDescending(x => x.Drivers)
+            .ThenByDescending(x => subclassesByBase.TryGetValue(x.Class.Id, out var s) ? s : 0)
             .ThenBy(x => x.Class.Name, StringComparer.Ordinal)
             .ToList();
 
@@ -355,10 +370,12 @@ public static class HtmlReportBuilder
         {
             sb.Append("<tr><td class=\"name\">").Append(E(c.Name)).Append("</td>");
             sb.Append("<td><span class=\"chip\">").Append(E(c.Kind)).Append("</span></td>");
-            if (drivers == 0)
-                sb.Append("<td><span class=\"tag-unused\">unused</span></td>");
-            else
+            if (drivers > 0)
                 sb.Append("<td class=\"num\">").Append(drivers).Append(" method").Append(drivers == 1 ? "" : "s").Append("</td>");
+            else if (subclassesByBase.TryGetValue(c.Id, out var subs))
+                sb.Append("<td class=\"num\">").Append(subs).Append(" subclass").Append(subs == 1 ? "" : "es").Append("</td>");
+            else
+                sb.Append("<td><span class=\"tag-unused\">unused</span></td>");
             var bases = extendsByClass.TryGetValue(c.Id, out var b) ? string.Join(", ", b) : "";
             sb.Append("<td class=\"mono dim\">").Append(E(bases)).Append("</td></tr>");
         }
@@ -366,6 +383,20 @@ public static class HtmlReportBuilder
         if (ranked.Count > MaxCollaboratorRows)
             sb.Append("<p class=\"subtle more\">… and ").Append(ranked.Count - MaxCollaboratorRows)
               .Append(" more (query the map db for the full list).</p>");
+
+        // The unused collaborators sort past the ranked cap and were invisible; list them explicitly so
+        // "N unused" is inspectable, not just a number. These are genuinely orphaned — nothing constructs
+        // them AND nothing inherits them (a class used only via DI/reflection can still be a false flag,
+        // which no syntax-only pass can see, so the wording stays "nothing references … by construction").
+        if (unusedList.Count > 0)
+        {
+            sb.Append("<details class=\"unused-sec\"><summary><span class=\"warn-text\">").Append(unusedList.Count)
+              .Append(" unused</span> — no method constructs them and nothing inherits them</summary><ul class=\"unused-list\">");
+            foreach (var c in unusedList)
+                sb.Append("<li><span class=\"u-name\">").Append(E(c.Name))
+                  .Append("</span><span class=\"chip\">").Append(E(c.Kind)).Append("</span></li>");
+            sb.Append("</ul></details>");
+        }
         sb.Append("</details>");
     }
 
@@ -654,6 +685,16 @@ public static class HtmlReportBuilder
         .tag-unused{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--amber);
         background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid var(--amber);
         border-radius:20px;padding:1px 9px}
+        .unused-sec{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+        .unused-sec>summary{cursor:pointer;list-style:none;font-size:12.5px;color:var(--dim)}
+        .unused-sec>summary::-webkit-details-marker{display:none}
+        .unused-sec>summary::before{content:"▸ ";color:var(--faint)}
+        .unused-sec[open]>summary::before{content:"▾ "}
+        .unused-list{list-style:none;margin:12px 0 2px;padding:0;display:grid;
+        grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px 16px}
+        .unused-list li{display:flex;align-items:center;justify-content:space-between;gap:8px;
+        padding:4px 0;border-bottom:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+        .u-name{font-size:12.5px;color:var(--ink);overflow-wrap:anywhere}
         .ep-exp{font:inherit;color:var(--dim);background:none;border:0;padding:0;cursor:pointer;
         font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:6px}
         .ep-exp:hover{color:var(--ink)}

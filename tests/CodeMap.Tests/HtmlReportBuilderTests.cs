@@ -136,16 +136,29 @@ public sealed class HtmlReportBuilderTests
 
         Assert.Contains("Collaborators", html);
         Assert.Contains("3 page objects", html);
-        Assert.Contains("2 unused", html);            // BasePage + DeadPage are driven by nothing
+        // Only DeadPage is unused: BasePage is inherited by LoginPage, so it is used via inheritance,
+        // not an orphan (this is the false-flag fix — the count is 1, not 2).
+        Assert.Contains("1 unused", html);
 
         // The driven page object shows its driver count and its base (inherits).
         Assert.Contains("LoginPage", html);
         Assert.Contains("1 method", html);
         Assert.Contains("BasePage", html);            // rendered in LoginPage's "extends" cell
 
-        // An orphan is explicitly tagged unused.
-        Assert.Contains("tag-unused", html);
-        Assert.Contains("DeadPage", html);
+        // BasePage is shown as used-via-inheritance ("1 subclass"), not tagged unused.
+        Assert.Contains("1 subclass", html);
+    }
+
+    [Fact]
+    public void Unused_collaborators_are_listed_so_they_can_be_seen()
+    {
+        var html = HtmlReportBuilder.Build(DocWithCollaborators());
+
+        // The unused disclosure lists the orphan by name (it sorts past the ranked cap otherwise).
+        var section = Between(html, "<details class=\"unused-sec\">", "</details>");
+        Assert.Contains("u-name\">DeadPage<", section);   // the genuine orphan is viewable
+        Assert.DoesNotContain("BasePage", section);       // the inherited base is NOT called unused
+        Assert.Contains("tag-unused", html);              // DeadPage still flagged in its row / header
     }
 
     [Fact]
