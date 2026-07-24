@@ -61,6 +61,29 @@ public sealed class ProjectMapBuilderTests
     }
 
     [Fact]
+    public void A_project_reference_with_no_semantic_edge_renders_as_a_dashed_build_reference()
+    {
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Meta = new Dictionary<string, string> { [MapSchema.MetaSolutionPath] = "/x/My.sln" },
+            Projects = new[]
+            {
+                new ProjectRow(1, "UI.Tests", "U.csproj", "net8.0", Kinds.BddTests),
+                new ProjectRow(2, "WebDriver.Support", "W.csproj", "net8.0", Kinds.SharedLibrary),
+            },
+            // Only a ProjectReference — no binds_to/uses_type/inherits (an infra lib consumed via DI).
+            Edges = new[] { new EdgeRow(RefKinds.Project, 1, RefKinds.Project, 2, EdgeKinds.References, "") },
+        };
+        var html = ProjectMapBuilder.Build(doc);
+
+        // The infra lib is connected (not an isolated 0-degree node) via a distinctly-styled dashed edge.
+        Assert.Contains("class=\"edge ref\" data-a=\"1\" data-b=\"2\"", html);
+        Assert.Contains("build-only reference", html);   // called out in the header
+        Assert.Contains("0 dependencies", html);          // …not counted as a semantic dependency
+    }
+
+    [Fact]
     public void Escapes_project_names()
     {
         var html = ProjectMapBuilder.Build(Doc());

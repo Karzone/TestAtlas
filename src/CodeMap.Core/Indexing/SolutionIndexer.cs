@@ -115,6 +115,13 @@ public sealed class SolutionIndexer
                 Path = ToRelative(rootDir, project.FilePath),
                 FullPath = project.FilePath is { } fp ? SafeFullPath(fp) : string.Empty,
                 TargetFramework = ReadTargetFramework(project),
+                // .csproj ProjectReferences (already resolved by the workspace) → the project names this
+                // one depends on at build time. Surfaces infra libraries consumed via DI/plain calls that
+                // produce no semantic edge, so the map doesn't render them as isolated nodes.
+                ReferencedProjectNames = project.ProjectReferences
+                    .Select(pr => project.Solution.GetProject(pr.ProjectId)?.Name)
+                    .Where(n => !string.IsNullOrEmpty(n)).Select(n => n!)
+                    .Distinct(StringComparer.Ordinal).ToList(),
             };
 
             if (project.FilePath is { } pf && File.Exists(pf))
@@ -355,6 +362,18 @@ public sealed class SolutionIndexer
 
         // ---- inherits / uses_type: the structural graph linking classes + their collaborators ----
         edges.AddRange(BuildStructuralEdges(classes, classInherits, methodUses, classHolds));
+
+        // ---- references: project → project from .csproj ProjectReferences (build/DI deps) ----
+        // projectHolders and projects are 1:1 in order (assigned in the loop above), so they zip.
+        var pidByName = projects
+            .GroupBy(p => p.Name, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.First().Id, StringComparer.Ordinal);
+        var referenceEdges = new List<EdgeEntity>();
+        foreach (var (ph, pe) in projectHolders.Zip(projects, (h, p) => (h, p)))
+            foreach (var refName in ph.ReferencedProjectNames)
+                if (pidByName.TryGetValue(refName, out var toPid) && toPid != pe.Id)
+                    referenceEdges.Add(new EdgeEntity(RefKinds.Project, pe.Id, RefKinds.Project, toPid, EdgeKinds.References, ""));
+        edges.AddRange(referenceEdges.OrderBy(e => e.FromId).ThenBy(e => e.ToId ?? 0));
 
         // ---- endpoints: dedupe (verb, route) solution-wide; call sites become calls_endpoint edges ----
         var endpoints = methodEndpointCalls
@@ -768,6 +787,7 @@ public sealed class SolutionIndexer
         public string Path = string.Empty;
         public string FullPath = string.Empty;
         public string? TargetFramework;
+        public List<string> ReferencedProjectNames = new(); // .csproj ProjectReferences (resolved names)
         public List<ClassHolder> Classes { get; } = new();
         public List<FeatureHolder> Features { get; } = new();
     }

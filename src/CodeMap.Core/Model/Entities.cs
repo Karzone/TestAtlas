@@ -148,6 +148,7 @@ public static class EdgeKinds
     public const string Inherits = "inherits";       // Class → Class (base type within the solution)
     public const string UsesType = "uses_type";      // Method → Class (constructs/receives/dereferences it)
     public const string Holds = "holds";             // Class → Class (declares it as a field/property/return/param type)
+    public const string References = "references";    // Project → Project (a .csproj ProjectReference — build/DI dependency)
     public const string CallsEndpoint = "calls_endpoint"; // Method → Endpoint (HTTP call in the body)
 }
 
@@ -159,6 +160,7 @@ public static class RefKinds
     public const string Class = "class";
     public const string Method = "method";
     public const string Endpoint = "endpoint";
+    public const string Project = "project";
 }
 
 /// <summary>binds_to confidence (spec §5.2).</summary>

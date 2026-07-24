@@ -19,7 +19,7 @@ public static class ProjectMapBuilder
 {
     private sealed record Node(int Id, string Name, string Kind, double X, double Y, double R, int InDegree, int OutDegree);
     private sealed record ClassBit(string Name, string Kind, int Weight);
-    private sealed record Link(int From, int To, int Weight, string Detail, IReadOnlyList<ClassBit> Classes);
+    private sealed record Link(int From, int To, int Weight, string Detail, IReadOnlyList<ClassBit> Classes, bool ReferencesOnly);
 
     private const int MaxClassRows = 20;
 
@@ -40,6 +40,7 @@ public static class ProjectMapBuilder
             RefKinds.StepDefinition => stepDefProj.TryGetValue(i, out var p) ? p : null,
             RefKinds.Method => methodProj.TryGetValue(i, out var p) ? p : null,
             RefKinds.Class => classProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.Project => i, // a references edge is already project-level
             _ => null,
         };
 
@@ -125,13 +126,20 @@ public static class ProjectMapBuilder
                             classNameById.TryGetValue(x.Key.Class, out var nm) ? nm : "?", x.Key.Kind, x.Value))
                         .ToList()
                     : new List<ClassBit>();
-                return new Link(kv.Key.From, kv.Key.To, kv.Value.Values.Sum(),
-                    string.Join(", ", kv.Value.OrderByDescending(x => x.Value).Select(x => $"{x.Value} {x.Key}")),
-                    classes);
+                // Weight is the SEMANTIC coupling (binds_to/uses_type/inherits); a bare .csproj reference
+                // isn't semantic weight. A link carrying only a `references` kind is a build/DI dependency
+                // the semantic edges missed — drawn faint so an infra lib connects instead of reading dead.
+                var semantic = kv.Value.Where(x => x.Key != EdgeKinds.References).Sum(x => x.Value);
+                var referencesOnly = semantic == 0;
+                var detail = referencesOnly
+                    ? "build reference (ProjectReference)"
+                    : string.Join(", ", kv.Value.Where(x => x.Key != EdgeKinds.References)
+                        .OrderByDescending(x => x.Value).Select(x => $"{x.Value} {x.Key}"));
+                return new Link(kv.Key.From, kv.Key.To, semantic, detail, classes, referencesOnly);
             })
             .OrderBy(l => l.From).ThenBy(l => l.To)
             .ToList();
-        var maxWeight = links.Count == 0 ? 1 : links.Max(l => l.Weight);
+        var maxWeight = links.Count == 0 || links.All(l => l.Weight == 0) ? 1 : links.Max(l => l.Weight);
 
         // ---- render ----
         var solutionName = Path.GetFileName(Meta(doc, MapSchema.MetaSolutionPath, "(solution)"));
@@ -150,8 +158,13 @@ public static class ProjectMapBuilder
         sb.Append("</div></div>");
         sb.Append("<div class=\"hdr-detail\">");
         sb.Append("<h1>").Append(E(solutionName)).Append("</h1>");
-        sb.Append("<p class=\"meta\">").Append(n).Append(" projects · ").Append(links.Count)
-          .Append(" dependencies · an arrow A→B means A depends on B (binds to / uses / inherits something in B)</p>");
+        var semanticLinks = links.Count(l => !l.ReferencesOnly);
+        var refOnlyLinks = links.Count - semanticLinks;
+        sb.Append("<p class=\"meta\">").Append(n).Append(" projects · ").Append(semanticLinks)
+          .Append(" dependencies");
+        if (refOnlyLinks > 0)
+            sb.Append(" · ").Append(refOnlyLinks).Append(" build-only reference").Append(refOnlyLinks == 1 ? "" : "s").Append(" (dashed)");
+        sb.Append(" · an arrow A→B means A depends on B (binds to / uses / inherits something in B; dashed = .csproj reference only)</p>");
         sb.Append("<div class=\"legend\">");
         LegendSwatch(sb, "bdd_tests", "BDD tests");
         LegendSwatch(sb, "shared_library", "shared library");
@@ -179,8 +192,9 @@ public static class ProjectMapBuilder
             var a = nodes[l.From];
             var b = nodes[l.To];
             var (path, _) = CurvePath(a, b);
-            var w = 1.0 + 3.5 * l.Weight / maxWeight;
-            sb.Append("<path class=\"edge\" data-a=\"").Append(l.From).Append("\" data-b=\"").Append(l.To).Append("\" d=\"")
+            var w = l.ReferencesOnly ? 1.0 : 1.0 + 3.5 * l.Weight / maxWeight;
+            sb.Append("<path class=\"edge").Append(l.ReferencesOnly ? " ref" : "").Append("\" data-a=\"")
+              .Append(l.From).Append("\" data-b=\"").Append(l.To).Append("\" d=\"")
               .Append(path).Append("\" stroke-width=\"").Append(F(w)).Append("\" marker-end=\"url(#arrow)\">");
             sb.Append("<title>").Append(E(a.Name)).Append(" → ").Append(E(b.Name)).Append("  (").Append(E(l.Detail)).Append(")</title>");
             sb.Append("</path>");
@@ -368,6 +382,7 @@ public static class ProjectMapBuilder
         .hint{color:var(--faint);font-size:11.5px;flex-basis:100%}
         .empty{color:var(--faint);text-align:center;padding:40px}
         .edge{fill:none;stroke:var(--faint);opacity:.4}
+        .edge.ref{stroke-dasharray:3 4;opacity:.22} /* build reference (ProjectReference), no semantic coupling */
         .arrowhead{fill:var(--faint);opacity:.6}
         .node circle{stroke:var(--card);stroke-width:2;cursor:pointer}
         .node.kind-bdd_tests circle{fill:var(--bdd)}.node.kind-shared_library circle{fill:var(--shared)}

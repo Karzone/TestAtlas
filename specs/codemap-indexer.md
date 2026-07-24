@@ -146,6 +146,7 @@ A single `edges` table: `(from_kind, from_id, to_kind, to_id, edge_kind, confide
 | `uses_type` | Method → Class | Method constructs, receives, or dereferences the class (how step classes reach page objects/API clients) |
 | `holds` | Class → Class | Class declares the collaborator as a field/property/return/param type — the aggregator/DI shape a name-based `new TypeName()` scan misses (target-typed `new()`, injected fields). The "referenced somewhere" signal, bounded to collaborator targets |
 | `inherits` | Class → Class | Base-type relationship within the solution |
+| `references` | Project → Project | A `.csproj` `ProjectReference` (build/DI dependency). Surfaces infra libraries consumed via DI or plain calls that produce no semantic edge, so the map doesn't render them as isolated 0-degree nodes; drawn as a distinct **dashed** edge |
 | `calls_endpoint` | Method → Endpoint | The method makes an HTTP call to the endpoint (route template) |
 
 **Keyword-agnostic matching.** A step binds to a definition on **text alone** — the Given/When/Then
@@ -310,8 +311,11 @@ that call them (directly a step definition, or a client/wrapper method whose cla
 
 The `map` command is a companion visualization: a **project dependency graph**. A directed edge
 A→B ("A depends on B") is derived by aggregating the map's cross-project `binds_to` / `uses_type` /
-`inherits` edges to project level (an edge whose endpoints resolve to two different projects). Nodes
-are laid out on a deterministic circle, sized by in-degree so shared step-definition / page-object
+`inherits` edges to project level (an edge whose endpoints resolve to two different projects). A
+project pair connected **only** by a `.csproj` `references` edge — no semantic coupling — is drawn as a
+distinct **dashed** "build reference", so an infra library consumed purely via DI / `ProjectReference`
+connects instead of reading as an isolated dead node (the header tallies the two kinds separately).
+Nodes are laid out on a deterministic circle, sized by in-degree so shared step-definition / page-object
 libraries stand out, coloured by project kind, with hover-to-isolate + pan/zoom. **Clicking a project
 pins it** and opens a dependency panel listing what it *depends on* and what *depends on it*, each with
 the underlying link breakdown (e.g. `→ SharedSteps · 340 binds_to`); clicking a panel entry walks the

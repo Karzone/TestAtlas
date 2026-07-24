@@ -16,4 +16,11 @@
     <None Include="Features\**\*.feature" />
   </ItemGroup>
 
+  <!-- A real ProjectReference: the SpecFlow features bind a step defined in the Reqnroll project. It
+       exercises the map's `references` edge (build/DI dependency the semantic edges would otherwise
+       already cover here). -->
+  <ItemGroup>
+    <ProjectReference Include="..\Reqnroll\Fixture.Reqnroll.csproj" />
+  </ItemGroup>
+
 </Project>

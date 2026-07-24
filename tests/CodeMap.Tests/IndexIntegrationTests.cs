@@ -289,6 +289,18 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
+    public void References_edge_captures_a_csproj_project_reference()
+    {
+        // Fixture.SpecFlow has a <ProjectReference> to Fixture.Reqnroll → a Project→Project references
+        // edge, so a build/DI dependency the semantic edges might miss still connects on the map.
+        var specflow = _fx.Doc.Projects.Single(p => p.Name == "Fixture.SpecFlow");
+        var reqnroll = _fx.Doc.Projects.Single(p => p.Name == "Fixture.Reqnroll");
+        Assert.Contains(_fx.Doc.Edges, e =>
+            e.EdgeKind == EdgeKinds.References && e.FromKind == RefKinds.Project && e.FromId == specflow.Id
+            && e.ToKind == RefKinds.Project && e.ToId == reqnroll.Id);
+    }
+
+    [Fact]
     public void Holds_edge_links_a_class_to_a_collaborator_it_declares_as_a_field()
     {
         // LoginSteps declares a `LoginPage _loginPage` field — so it HOLDS LoginPage, the aggregator/DI
