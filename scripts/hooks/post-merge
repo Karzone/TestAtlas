@@ -1,0 +1,30 @@
+#!/bin/sh
+# TestAtlas post-merge hook: after a merge or `git pull`, warn if the semantic map is
+# stale relative to the source. Non-blocking and CI-agnostic - it only prints a notice.
+#
+# Enable (from the repo root):
+#     git config core.hooksPath scripts/hooks
+#
+# The map path is auto-detected (codemap.db / atlas.db at the repo root) or set explicitly:
+#     export TESTATLAS_DB=/path/to/your/map.db
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
+db="$TESTATLAS_DB"
+if [ -z "$db" ]; then
+    for cand in "$root/codemap.db" "$root/atlas.db"; do
+        [ -f "$cand" ] && db="$cand" && break
+    done
+fi
+[ -z "$db" ] && exit 0   # no map in this repo yet - nothing to check
+
+checker="$root/scripts/check-map-age.py"
+[ -f "$checker" ] || exit 0
+
+if command -v python >/dev/null 2>&1; then PY=python
+elif command -v python3 >/dev/null 2>&1; then PY=python3
+else exit 0   # no Python available - skip silently
+fi
+
+"$PY" "$checker" "$db"   # prints FRESH / STALE details; exit code ignored so the merge never blocks
+exit 0
