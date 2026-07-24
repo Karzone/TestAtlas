@@ -141,4 +141,52 @@ public sealed class ImpactAnalyzerTests
         Assert.Equal(1, reach[11].CallSiteCount);
         Assert.Equal(new[] { 1 }, reach[11].ScenarioIds); // transitive through the page object
     }
+
+    [Fact]
+    public void EndpointScenarioDetails_resolves_the_affected_scenarios_with_their_connecting_steps()
+    {
+        // Same graph as above, now with a Feature so the drill-down can resolve names: endpoint 11 is
+        // called inside LoginPage.Open, reached transitively by the SignIn step method.
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Classes = Doc().Classes,
+            Methods = new[]
+            {
+                new MethodRow(1, 1, 1, "SignIn", "SignIn()", "public", Kinds.StepDefinitionMethod, "Steps.cs", 3, 4),
+                new MethodRow(5, 2, 1, "Open", "Open()", "public", Kinds.PageObjectMethod, "LoginPage.cs", 3, 4),
+            },
+            StepDefinitions = new[] { new StepDefinitionRow(1, 1, 1, 1, "When", "user signs in", ExpressionKinds.Regex, "", "Steps.cs", 3) },
+            Features = new[] { new FeatureRow(1, 1, "Login", "d", "", "Login.feature") },
+            Scenarios = new[] { new ScenarioRow(1, 1, 1, "Sign in scenario", "scenario", null, 0, "Login.feature", 3) },
+            ScenarioSteps = new[] { new ScenarioStepRow(1, 1, 1, "When", "user signs in", 0, false, false, "Login.feature", 4) },
+            Endpoints = new[]
+            {
+                new EndpointRow(10, "POST", "/api/orders"),
+                new EndpointRow(11, "GET", "GetSupplierRequest"),
+            },
+            Edges = new[]
+            {
+                new EdgeRow(RefKinds.ScenarioStep, 1, RefKinds.StepDefinition, 1, EdgeKinds.BindsTo, BindConfidence.Exact),
+                new EdgeRow(RefKinds.Method, 1, RefKinds.Class, 2, EdgeKinds.UsesType, BindConfidence.Exact), // SignIn → LoginPage
+                new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 10, EdgeKinds.CallsEndpoint, ""),
+                new EdgeRow(RefKinds.Method, 5, RefKinds.Endpoint, 11, EdgeKinds.CallsEndpoint, ""),
+            },
+        };
+
+        // Only the requested endpoint is resolved (the report resolves just its shown rows).
+        var details = ImpactAnalyzer.EndpointScenarioDetails(doc, new[] { 11 });
+        Assert.True(details.ContainsKey(11));
+        Assert.False(details.ContainsKey(10));
+
+        // The detail is the sign-in scenario, with its feature and the step text that connects it — the
+        // same drill-down `impact --endpoint` prints, not just a count.
+        var scen = Assert.Single(details[11]);
+        Assert.Equal("Sign in scenario", scen.Scenario);
+        Assert.Equal("Login", scen.Feature);
+        Assert.Equal(new[] { "user signs in" }, scen.Via);
+
+        // An empty request set resolves nothing (guard).
+        Assert.Empty(ImpactAnalyzer.EndpointScenarioDetails(doc, Array.Empty<int>()));
+    }
 }

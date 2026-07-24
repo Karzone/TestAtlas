@@ -118,15 +118,7 @@ public static class ImpactAnalyzer
 
         IReadOnlyList<int> Scenarios(HashSet<int> seedMethods)
         {
-            var affected = new HashSet<int>();
-            foreach (var m in seedMethods)
-                if (stepDefsByMethod.TryGetValue(m, out var sd)) affected.UnionWith(sd);
-
-            var seedClasses = seedMethods.Select(m => classOfMethod.TryGetValue(m, out var c) ? c : -1).Where(c => c >= 0).ToHashSet();
-            var reach = ExpandReach(seedClasses, usesEdges, inheritsEdges, classOfMethod);
-            var reachedMethods = usesEdges.Where(e => reach.Contains(e.Class)).Select(e => e.Method).ToHashSet();
-            foreach (var s in doc.StepDefinitions)
-                if (reachedMethods.Contains(s.MethodId)) affected.Add(s.Id);
+            var affected = EndpointAffectedStepDefs(seedMethods, doc, classOfMethod, stepDefsByMethod, usesEdges, inheritsEdges);
 
             var scen = new HashSet<int>();
             foreach (var sd in affected)
@@ -143,6 +135,98 @@ public static class ImpactAnalyzer
             result[ep.Id] = new EndpointReach(callers.Count, Scenarios(callers));
         }
         return result;
+    }
+
+    /// <summary>
+    /// The <b>detailed</b> reverse reach of the requested endpoints: for each, the affected scenarios
+    /// resolved to feature, scenario, and the step text(s) that connect them — the same drill-down
+    /// <c>impact --endpoint</c> prints, so the HTML report can expand a row without a query. Only the
+    /// asked-for endpoints are resolved (the report resolves just its shown rows), each list ordered
+    /// feature → scenario. Shares the caller → affected-step-def walk with <see cref="EndpointReachAll"/>,
+    /// so the counts it yields agree with the panel's blast-radius numbers.
+    /// </summary>
+    public static IReadOnlyDictionary<int, IReadOnlyList<AffectedScenario>> EndpointScenarioDetails(
+        MapDocument doc, IReadOnlyCollection<int> endpointIds)
+    {
+        var want = endpointIds as IReadOnlySet<int> ?? endpointIds.ToHashSet();
+        var result = new Dictionary<int, IReadOnlyList<AffectedScenario>>();
+        if (want.Count == 0) return result;
+
+        var classOfMethod = doc.Methods.ToDictionary(m => m.Id, m => m.ClassId);
+        var stepDefsByMethod = doc.StepDefinitions.GroupBy(s => s.MethodId).ToDictionary(g => g.Key, g => g.Select(s => s.Id).ToList());
+        var usesEdges = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.UsesType && e.FromKind == RefKinds.Method && e.ToId is int)
+            .Select(e => (Method: e.FromId, Class: e.ToId!.Value)).ToList();
+        var inheritsEdges = doc.Edges.Where(e => e.EdgeKind == EdgeKinds.Inherits && e.FromKind == RefKinds.Class && e.ToId is int)
+            .Select(e => (Derived: e.FromId, Base: e.ToId!.Value)).ToList();
+
+        var boundBy = new Dictionary<int, List<int>>();
+        foreach (var e in doc.Edges)
+            if (e.EdgeKind == EdgeKinds.BindsTo && e.FromKind == RefKinds.ScenarioStep && e.ToKind == RefKinds.StepDefinition && e.ToId is int sd)
+                (boundBy.TryGetValue(sd, out var l) ? l : (boundBy[sd] = new())).Add(e.FromId);
+
+        var callsByEndpoint = new Dictionary<int, HashSet<int>>();
+        foreach (var e in doc.Edges)
+            if (e.EdgeKind == EdgeKinds.CallsEndpoint && e.FromKind == RefKinds.Method && e.ToId is int ep)
+                (callsByEndpoint.TryGetValue(ep, out var m) ? m : (callsByEndpoint[ep] = new())).Add(e.FromId);
+
+        var scenarioStepById = doc.ScenarioSteps.ToDictionary(s => s.Id);
+        var scenarioById = doc.Scenarios.ToDictionary(s => s.Id);
+        var featureById = doc.Features.ToDictionary(f => f.Id);
+
+        foreach (var ep in doc.Endpoints)
+        {
+            if (!want.Contains(ep.Id)) continue;
+            var callers = callsByEndpoint.TryGetValue(ep.Id, out var s) ? s : new HashSet<int>();
+            var stepDefs = EndpointAffectedStepDefs(callers, doc, classOfMethod, stepDefsByMethod, usesEdges, inheritsEdges);
+
+            var viaByScenario = new Dictionary<int, SortedSet<string>>();
+            foreach (var sd in stepDefs)
+                if (boundBy.TryGetValue(sd, out var steps))
+                    foreach (var stId in steps)
+                        if (scenarioStepById.TryGetValue(stId, out var st))
+                        {
+                            if (!viaByScenario.TryGetValue(st.ScenarioId, out var set))
+                                viaByScenario[st.ScenarioId] = set = new(StringComparer.Ordinal);
+                            set.Add(st.Text);
+                        }
+
+            result[ep.Id] = viaByScenario
+                .Select(kv =>
+                {
+                    var sc = scenarioById.TryGetValue(kv.Key, out var v) ? v : null;
+                    var ft = sc is not null && featureById.TryGetValue(sc.FeatureId, out var f) ? f : null;
+                    return new AffectedScenario(kv.Key, sc?.Name ?? "?", ft?.Name ?? "?", ft?.FilePath ?? "", kv.Value.ToList());
+                })
+                .OrderBy(a => a.Feature, StringComparer.Ordinal)
+                .ThenBy(a => a.Scenario, StringComparer.Ordinal)
+                .ThenBy(a => a.ScenarioId)
+                .ToList();
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// The set of step definitions affected by a set of endpoint-calling methods: the callers that are
+    /// themselves step definitions, plus step methods that reach a caller's class transitively (through
+    /// a client/wrapper, same reach rules as a class change). Shared by the endpoint reach passes.
+    /// </summary>
+    private static HashSet<int> EndpointAffectedStepDefs(
+        HashSet<int> seedMethods, MapDocument doc,
+        IReadOnlyDictionary<int, int> classOfMethod,
+        IReadOnlyDictionary<int, List<int>> stepDefsByMethod,
+        List<(int Method, int Class)> usesEdges,
+        List<(int Derived, int Base)> inheritsEdges)
+    {
+        var affected = new HashSet<int>();
+        foreach (var m in seedMethods)
+            if (stepDefsByMethod.TryGetValue(m, out var sd)) affected.UnionWith(sd);
+
+        var seedClasses = seedMethods.Select(m => classOfMethod.TryGetValue(m, out var c) ? c : -1).Where(c => c >= 0).ToHashSet();
+        var reach = ExpandReach(seedClasses, usesEdges, inheritsEdges, classOfMethod);
+        var reachedMethods = usesEdges.Where(e => reach.Contains(e.Class)).Select(e => e.Method).ToHashSet();
+        foreach (var s in doc.StepDefinitions)
+            if (reachedMethods.Contains(s.MethodId)) affected.Add(s.Id);
+        return affected;
     }
 
     private static (HashSet<int> StepDefs, string Label) ResolveTargets(

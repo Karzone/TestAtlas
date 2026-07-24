@@ -299,7 +299,11 @@ diagnostics table, a **collaborators** panel (page objects / API clients ranked 
 distinct methods drive them via `uses_type`, with the base class from `inherits` and an **unused**
 flag on orphans nothing drives), and an **API endpoints** panel (routes + operations the suite calls,
 each with a colour-coded verb badge, a route/operation kind chip, its call-site count, and its
-reverse **blast radius** — how many scenarios reach it, via `EndpointReachAll`). All map-derived text is HTML-escaped. Deterministic: the only volatile value
+reverse **blast radius** — how many scenarios reach it, via `EndpointReachAll`). The scenarios count is
+an **expandable toggle**: opening a row reveals the reached scenarios grouped by feature, each with the
+step text that connects it (via `EndpointScenarioDetails`, resolved only for the shown rows) — the same
+drill-down `impact --endpoint` prints, capped per row with a pointer to the CLI for the exhaustive list.
+All map-derived text is HTML-escaped. Deterministic: the only volatile value
 (the generated timestamp) is read from the map, not the clock. When the map's `user_version`
 predates the current schema, the report shows a **stale-schema banner** (and `report`/`search`
 print a matching console note) explaining that facets like Gherkin features / coverage / search are

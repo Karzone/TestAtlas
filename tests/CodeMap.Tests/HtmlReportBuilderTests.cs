@@ -245,6 +245,35 @@ public sealed class HtmlReportBuilderTests
     }
 
     [Fact]
+    public void Endpoint_row_expands_to_its_affected_scenarios()
+    {
+        var html = HtmlReportBuilder.Build(DocWithEndpoints());
+
+        // The scenarios cell is now a toggle backed by a hidden detail row (the drill-down structure).
+        Assert.Contains("toggleEp(this)", html);
+        Assert.Contains("class=\"ep-det\"", html);
+        Assert.Contains("function toggleEp", html); // the reveal script is wired in
+
+        // Vacuity, scoped to the endpoints panel (the Features tree also names the scenario): the detail
+        // lists the real feature → scenario → connecting step, not just a count.
+        var epPanel = Between(html, "<h2>API endpoints</h2>", "<h2>Features</h2>");
+        Assert.Contains("Place order", epPanel);   // the reached scenario
+        Assert.Contains("via ordering", epPanel);  // the step text that connects it
+        Assert.Contains(">Orders<", epPanel);      // the feature grouping label
+        Assert.Contains("scenario across", epPanel); // the detail header ("1 scenario across 1 feature")
+    }
+
+    /// <summary>The substring between two markers — scopes an assertion to one panel of the report.</summary>
+    private static string Between(string html, string start, string end)
+    {
+        var a = html.IndexOf(start, StringComparison.Ordinal);
+        Assert.True(a >= 0, $"marker not found: {start}");
+        var b = html.IndexOf(end, a, StringComparison.Ordinal);
+        Assert.True(b > a, $"end marker not found after start: {end}");
+        return html.Substring(a, b - a);
+    }
+
+    [Fact]
     public void No_endpoints_panel_when_the_map_has_none() // vacuity guard
     {
         var html = HtmlReportBuilder.Build(Doc()); // Doc() has no endpoints

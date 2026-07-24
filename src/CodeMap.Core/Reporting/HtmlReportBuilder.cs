@@ -390,12 +390,17 @@ public static class HtmlReportBuilder
         if (operations > 0) sb.Append(operations).Append(" operation").Append(operations == 1 ? "" : "s");
         sb.Append("</span></summary>");
 
+        // Resolve the drill-down (feature → scenario → connecting step) for just the rows we show, so a
+        // reader can expand an endpoint to the scenarios it breaks — without dropping to `impact --endpoint`.
+        var shown = ranked.Take(MaxEndpointRows).ToList();
+        var details = ImpactAnalyzer.EndpointScenarioDetails(doc, shown.Select(x => x.Ep.Id).ToList());
+
         sb.Append("<div class=\"table-scroll\"><table class=\"grid ep\"><thead><tr>");
         foreach (var h in new[] { "verb", "endpoint", "kind", "call sites", "scenarios" })
             sb.Append("<th>").Append(h).Append("</th>");
         sb.Append("</tr></thead><tbody>");
 
-        foreach (var (ep, r) in ranked.Take(MaxEndpointRows))
+        foreach (var (ep, r) in shown)
         {
             var op = IsOperation(ep.Route);
             sb.Append("<tr><td><span class=\"verb ").Append(VerbClass(ep.Verb)).Append("\">")
@@ -405,17 +410,60 @@ public static class HtmlReportBuilder
               .Append(op ? "operation" : "route").Append("</span></td>");
             sb.Append("<td class=\"num\">").Append(r.CallSiteCount).Append("</td>");
             if (r.ScenarioIds.Count == 0)
-                sb.Append("<td><span class=\"tag-unused\">none bound</span></td>");
-            else
-                sb.Append("<td class=\"num\">").Append(r.ScenarioIds.Count)
-                  .Append(" scenario").Append(r.ScenarioIds.Count == 1 ? "" : "s").Append("</td>");
-            sb.Append("</tr>");
+            {
+                sb.Append("<td><span class=\"tag-unused\">none bound</span></td></tr>");
+                continue;
+            }
+            // The scenarios cell becomes a toggle that reveals the detail row beneath it.
+            sb.Append("<td class=\"num\"><button type=\"button\" class=\"ep-exp\" aria-expanded=\"false\" onclick=\"toggleEp(this)\">")
+              .Append(r.ScenarioIds.Count).Append(" scenario").Append(r.ScenarioIds.Count == 1 ? "" : "s")
+              .Append("<span class=\"ep-caret\">›</span></button></td></tr>");
+
+            var scenarios = details.TryGetValue(ep.Id, out var sc) ? sc : Array.Empty<AffectedScenario>();
+            AppendEndpointDetail(sb, scenarios);
         }
         sb.Append("</tbody></table></div>");
         if (ranked.Count > MaxEndpointRows)
             sb.Append("<p class=\"subtle more\">… and ").Append(ranked.Count - MaxEndpointRows)
               .Append(" more (query the map db for the full list).</p>");
         sb.Append("</details>");
+    }
+
+    // A wide reach can be thousands of scenarios; the report is a glance, so the expanded row shows a
+    // bounded, feature-grouped sample and points at `impact --endpoint` for the exhaustive list.
+    private const int MaxScenariosPerEndpoint = 50;
+
+    /// <summary>
+    /// The hidden detail row beneath an endpoint: the scenarios it reaches, grouped by feature, each with
+    /// the step text that connects it (the same drill-down <c>impact --endpoint</c> prints). Spans all
+    /// five columns and is revealed by the row's scenarios toggle.
+    /// </summary>
+    private static void AppendEndpointDetail(StringBuilder sb, IReadOnlyList<AffectedScenario> scenarios)
+    {
+        sb.Append("<tr class=\"ep-det\" hidden><td colspan=\"5\">");
+
+        var featureCount = scenarios.Select(s => s.Feature).Distinct().Count();
+        sb.Append("<div class=\"ep-det-head\">").Append(scenarios.Count)
+          .Append(" scenario").Append(scenarios.Count == 1 ? "" : "s").Append(" across ")
+          .Append(featureCount).Append(" feature").Append(featureCount == 1 ? "" : "s");
+        if (scenarios.Count > MaxScenariosPerEndpoint)
+            sb.Append(" — showing the first ").Append(MaxScenariosPerEndpoint)
+              .Append(" (full list via <span class=\"mono\">impact --endpoint</span>)");
+        sb.Append("</div>");
+
+        foreach (var group in scenarios.Take(MaxScenariosPerEndpoint).GroupBy(s => s.Feature))
+        {
+            sb.Append("<div class=\"ep-feat\">").Append(E(group.Key)).Append("</div><ul class=\"ep-scn\">");
+            foreach (var s in group)
+            {
+                sb.Append("<li>").Append(E(s.Scenario));
+                if (s.Via.Count > 0)
+                    sb.Append(" <span class=\"ep-via\">via ").Append(E(string.Join(", ", s.Via))).Append("</span>");
+                sb.Append("</li>");
+            }
+            sb.Append("</ul>");
+        }
+        sb.Append("</td></tr>");
     }
 
     private static string VerbClass(string verb) => verb switch
@@ -542,6 +590,19 @@ public static class HtmlReportBuilder
         .tag-unused{display:inline-block;font-size:11px;font-family:var(--mono);color:var(--amber);
         background:color-mix(in srgb,var(--amber) 12%,transparent);border:1px solid var(--amber);
         border-radius:20px;padding:1px 9px}
+        .ep-exp{font:inherit;color:var(--dim);background:none;border:0;padding:0;cursor:pointer;
+        font-variant-numeric:tabular-nums;display:inline-flex;align-items:center;gap:6px}
+        .ep-exp:hover{color:var(--ink)}
+        .ep-caret{display:inline-block;color:var(--faint);transition:transform .15s ease}
+        .ep-exp[aria-expanded="true"] .ep-caret{transform:rotate(90deg)}
+        .ep-det>td{background:var(--card);padding:12px 16px}
+        .ep-det-head{font-size:12.5px;color:var(--faint);margin-bottom:10px}
+        .ep-feat{font-weight:600;font-size:12.5px;color:var(--ink);margin:12px 0 4px}
+        .ep-feat:first-of-type{margin-top:0}
+        .ep-scn{list-style:none;margin:0 0 4px;padding:2px 0 2px 14px;border-left:2px solid var(--line)}
+        .ep-scn li{font-size:13px;color:var(--dim);padding:2px 0}
+        .ep-via{color:var(--faint);font-size:12px}
+        @media(prefers-reduced-motion:reduce){.ep-caret{transition:none}}
         details.feature{border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden;background:var(--bg)}
         details.feature>summary{cursor:pointer;list-style:none;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;
         background:var(--card)}
@@ -606,6 +667,13 @@ public static class HtmlReportBuilder
         }
         function setAllFeatures(open){
           document.querySelectorAll('#tree > details.feature').forEach(function(f){f.open=open;});
+        }
+        function toggleEp(btn){
+          var det=btn.closest('tr').nextElementSibling;
+          if(!det||!det.classList.contains('ep-det'))return;
+          var closed=det.hasAttribute('hidden');
+          if(closed){det.removeAttribute('hidden');}else{det.setAttribute('hidden','');}
+          btn.setAttribute('aria-expanded',closed?'true':'false');
         }
         """;
 }
