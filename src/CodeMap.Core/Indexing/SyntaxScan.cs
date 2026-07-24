@@ -131,7 +131,8 @@ internal static class SyntaxScan
             ReferencesUiType: referencesUi,
             ReferencesApiType: referencesApi,
             HoldsOrConstructsApiMarker: holdsOrConstructsApiMarker,
-            ConstructedTypeNames: constructed);
+            ConstructedTypeNames: constructed,
+            IsStatic: type.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword)));
     }
 
     /// <summary>The step framework's default expression kind, inferred from the file's usings.</summary>

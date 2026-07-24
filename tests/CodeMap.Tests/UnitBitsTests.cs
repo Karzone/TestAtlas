@@ -53,6 +53,31 @@ public sealed class ClassifierTests
                      baseKind: n => n == "BasePage" ? Kinds.PageObject : null));
 
     [Fact]
+    public void Inheriting_an_api_client_wins_over_the_page_object_ratio()
+    {
+        // GlobalConfigNetworkApiService : BaseApiService, yet ≥50% of its members touch UI types. The
+        // base type is the stronger signal, so it's an api_client — not the page_object the greedy
+        // UI-ratio rule claimed first. (Fails on the pre-reorder classifier: it returned page_object.)
+        var facts = CF("GlobalConfigNetworkApiService", baseType: "BaseApiService",
+            instMembers: 4, uiMembers: 4, refUi: true);
+        Assert.Equal(Kinds.ApiClient, Classify(facts, n => n == "BaseApiService" ? Kinds.ApiClient : null));
+    }
+
+    [Fact]
+    public void A_static_class_is_never_a_page_object_or_api_client()
+    {
+        // A static RestSharp helper references API types and even holds a marker — which would trip the
+        // api rules — but a `static class` is never instantiated, so it is not a collaborator. It falls
+        // through to `other`. (Fails on the pre-guard classifier: it returned api_client.)
+        var facts = new ClassFacts("RestSharpHttpRequestExecutionReportingDetailsCreator", BaseTypeName: null,
+            HasBindingAttribute: false, HasTestClassAttribute: false, MethodCount: 3, StepMethodCount: 0,
+            TestMethodCount: 0, HookMethodCount: 0, InstanceMemberCount: 0, UiReferencingMembers: 0,
+            ApiReferencingMembers: 3, ReferencesUiType: false, ReferencesApiType: true,
+            HoldsOrConstructsApiMarker: true, IsStatic: true);
+        Assert.Equal(Kinds.Other, Classify(facts));
+    }
+
+    [Fact]
     public void Step_class_wins_over_page_object_when_both_apply()
         => Assert.Equal(Kinds.StepClass, Classify(CF("UiSteps", binding: true, instMembers: 2, uiMembers: 2)));
 

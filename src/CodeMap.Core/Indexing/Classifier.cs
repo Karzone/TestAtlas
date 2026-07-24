@@ -31,7 +31,8 @@ public sealed record ClassFacts(
     bool ReferencesUiType,
     bool ReferencesApiType,
     bool HoldsOrConstructsApiMarker = false, // holds/constructs a RestSharp/HttpClient marker type
-    IReadOnlyList<string>? ConstructedTypeNames = null); // simple names of `new X()` in the class body
+    IReadOnlyList<string>? ConstructedTypeNames = null, // simple names of `new X()` in the class body
+    bool IsStatic = false);        // a `static class` — never instantiated, so never a collaborator
 
 /// <summary>Per-method signals for method-kind classification.</summary>
 public sealed record MethodFacts(
@@ -62,39 +63,48 @@ public static class Classifier
             if (f.HasBindingAttribute || f.StepMethodCount >= 1)
                 return Kinds.StepClass;
 
-            // 2. Page object.
-            if (f.InstanceMemberCount > 0 && f.UiReferencingMembers * 2 >= f.InstanceMemberCount)
-                return Kinds.PageObject;
-            if (NameHasSuffix(f.Name, opts.PageObjectSuffixes) && f.ReferencesUiType)
-                return Kinds.PageObject;
-            if (kindOf(f.BaseTypeName) == Kinds.PageObject)
-                return Kinds.PageObject;
+            // 2. Inheritance is the STRONGEST collaborator signal — an explicit base already classified
+            //    as a page object / API client wins over the member-ratio and name heuristics below. A
+            //    `*ApiService : BaseApiService` that also touches UI types is an api_client, not a page
+            //    object (which the greedy UI-ratio rule would otherwise claim first).
+            var baseKind = kindOf(f.BaseTypeName);
+            if (baseKind == Kinds.PageObject) return Kinds.PageObject;
+            if (baseKind == Kinds.ApiClient) return Kinds.ApiClient;
 
-            // 3. API client — references RestSharp/HttpClient directly, holds a transport marker,
-            //    matches a name suffix while touching an API type, inherits an api_client, OR is a
-            //    named wrapper that constructs one. The last rule walks the service layer that hides
-            //    HTTP behind a typed request (BaseRequest → BaseApiService → *ApiService); it needs the
-            //    inherits/uses fixpoint to converge.
-            if (f.MethodCount > 0 && f.ApiReferencingMembers * 2 >= f.MethodCount)
-                return Kinds.ApiClient;
-            if (f.HoldsOrConstructsApiMarker)
-                return Kinds.ApiClient;
-            if (NameHasSuffix(f.Name, opts.ApiClientSuffixes) && f.ReferencesApiType)
-                return Kinds.ApiClient;
-            if (kindOf(f.BaseTypeName) == Kinds.ApiClient)
-                return Kinds.ApiClient;
-            // Constructing an api_client only makes a class part of the API layer when it is ALSO named
-            // like one (Api/Client/Service/Endpoint). Composition alone is *usage*, not *identity*: a
-            // utility/helper/resolver that news up a request wrapper to CALL it is a consumer — exactly
-            // as a step class that constructs a page object is not a page object (page objects likewise
-            // propagate only by inheritance, never composition). Without this name gate every
-            // *Utilities/*Helper that internally did `new BaseRequest<T>()` was mis-promoted — 40+ false
-            // positives on a real 28-project solution, against ~90 genuine clients. The genuine base
-            // wrappers (e.g. BaseApiService) are conventionally *…Service and keep their badge.
-            if (NameHasSuffix(f.Name, opts.ApiClientSuffixes)
-                && f.ConstructedTypeNames is { } constructed
-                && constructed.Any(n => kindOf(n) == Kinds.ApiClient))
-                return Kinds.ApiClient;
+            // 3. Page object / API client are INSTANTIATED collaborators; a `static class` is never one
+            //    (it holds no state and is never `new`-ed), so it skips these rules entirely even when it
+            //    references RestSharp/UI types — a static RestSharp helper is a helper, not a client.
+            if (!f.IsStatic)
+            {
+                // Page object.
+                if (f.InstanceMemberCount > 0 && f.UiReferencingMembers * 2 >= f.InstanceMemberCount)
+                    return Kinds.PageObject;
+                if (NameHasSuffix(f.Name, opts.PageObjectSuffixes) && f.ReferencesUiType)
+                    return Kinds.PageObject;
+
+                // API client — references RestSharp/HttpClient directly, holds a transport marker,
+                // matches a name suffix while touching an API type, OR is a named wrapper that constructs
+                // one. The last rule walks the service layer that hides HTTP behind a typed request
+                // (BaseRequest → BaseApiService → *ApiService); it needs the inherits/uses fixpoint.
+                if (f.MethodCount > 0 && f.ApiReferencingMembers * 2 >= f.MethodCount)
+                    return Kinds.ApiClient;
+                if (f.HoldsOrConstructsApiMarker)
+                    return Kinds.ApiClient;
+                if (NameHasSuffix(f.Name, opts.ApiClientSuffixes) && f.ReferencesApiType)
+                    return Kinds.ApiClient;
+                // Constructing an api_client only makes a class part of the API layer when it is ALSO named
+                // like one (Api/Client/Service/Endpoint). Composition alone is *usage*, not *identity*: a
+                // utility/helper/resolver that news up a request wrapper to CALL it is a consumer — exactly
+                // as a step class that constructs a page object is not a page object (page objects likewise
+                // propagate only by inheritance, never composition). Without this name gate every
+                // *Utilities/*Helper that internally did `new BaseRequest<T>()` was mis-promoted — 40+ false
+                // positives on a real 28-project solution, against ~90 genuine clients. The genuine base
+                // wrappers (e.g. BaseApiService) are conventionally *…Service and keep their badge.
+                if (NameHasSuffix(f.Name, opts.ApiClientSuffixes)
+                    && f.ConstructedTypeNames is { } constructed
+                    && constructed.Any(n => kindOf(n) == Kinds.ApiClient))
+                    return Kinds.ApiClient;
+            }
 
             // 4. Test class.
             if (f.HasTestClassAttribute || f.TestMethodCount >= 1)

@@ -188,13 +188,23 @@ Heuristics are ordered; first match wins. Every heuristic must be overridable vi
 **Step class** — class carries `[Binding]` (Reqnroll or SpecFlow namespace) or contains ≥ 1
 method with a step attribute.
 
+**Inheritance wins first (both collaborator kinds).** After the step-class check, a class whose base
+type is already classified as a page object → page object, or as an API client → API client, **before**
+the member-ratio/name heuristics below. An explicit base type is a stronger signal than a member-ratio
+guess: a `*ApiService : BaseApiService` that also touches UI types is an API client, not the page object
+the greedy UI-ratio rule would otherwise claim.
+
+**Only instantiated types are collaborators.** A `static class` is never a page object or API client
+(it holds no state and is never `new`-ed), so it skips every rule below even when it references
+RestSharp/UI types — a static RestSharp helper is a helper, not a client.
+
 **Page object** — any of, in order:
 
 1. ≥ 50% of instance members reference Playwright (`IPage`, `ILocator`) or Selenium
    (`IWebDriver`, `By`, `IWebElement`) types;
 2. class name matches configurable suffix list (default: `Page`, `PageObject`, `Screen`,
    `Component`) **and** references at least one UI-automation type;
-3. inherits from a class already classified as a page object.
+3. inherits from a class already classified as a page object (see *inheritance wins first* above).
 
 **API client** — any of, in order:
 
@@ -207,7 +217,8 @@ method with a step attribute.
    concrete `RestClient restClient` field);
 3. name matches suffix list (default: `Client`, `Api`, `Service`, `Endpoint`) **and**
    references RestSharp/HttpClient;
-4. inherits from a classified API client;
+4. inherits from a classified API client (handled by *inheritance wins first* above, so it also beats the
+   page-object UI-ratio rule);
 5. is **named like an API client** (matches the suffix list) **and constructs/wraps** a classified API
    client (`new <api_client>(…)` anywhere in the class body). The name gate is deliberate:
    *composition alone is usage, not identity*. A `*Utilities`/`*Helper`/`*Resolver` that internally
