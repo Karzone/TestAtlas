@@ -138,7 +138,7 @@ public sealed record ScenarioStepEntity(
 /// are the <c>calls_endpoint</c> edges. <paramref name="Verb"/> is <c>ANY</c> when it could not be
 /// inferred from the call shape.
 /// </summary>
-public sealed record EndpointEntity(int Id, string Verb, string Route);
+public sealed record EndpointEntity(int Id, string Verb, string Route, string? Path = null, string? TargetApi = null);
 
 /// <summary>Edge-kind vocabulary (spec §5.2).</summary>
 public static class EdgeKinds

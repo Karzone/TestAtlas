@@ -115,9 +115,16 @@ and line locations.
     a typed request object rather than at the call site (`new BaseRequest<GetUserRequest>()
     .ExecuteAsync()` — the real 1FrameworkAutomatedTest shape). When a **single-type-argument generic
     construction** `new Wrapper<Request>()` uses a `Wrapper` classified `api_client` (see §6), the
-    **request type is the operation identity** (route = `GetUserRequest`); the verb is inferred from
-    the leading verb word of the name (`Get…` → GET, `Create…`/`Add…`/`Submit…` → POST, `Update…` →
-    PUT, `Delete…`/`Remove…` → DELETE, else `ANY`, never a guess). The `api_client` gate is the whole
+    **request type is the operation identity** (route = `GetUserRequest`). **Statically-recovered route
+    (slice 5):** when the request type is a **request descriptor** — a class declaring its route as a
+    string-literal getter (`ServiceName`/`Resource`/…) and its verb as a getter returning a
+    `Method`/`HttpMethod` member — those resolve into the endpoint's `path` (the real route, e.g.
+    `api/gateway/estimate/definition/section/list`, a `{0}` template kept verbatim), a **real verb**,
+    and `target_api` (the logical API bucket, e.g. `MotorBff`). Detection keys on the universal
+    `Method`-returning getter, not any one interface name, so it generalises past 1FAT. When no
+    descriptor is found the verb falls back to inference from the leading verb word (`Get…` → GET,
+    `Create…`/`Add…`/`Submit…` → POST, `Update…` → PUT, `Delete…`/`Remove…` → DELETE, else `ANY`, never
+    a guess) and `path`/`target_api` stay null. The `api_client` gate is the whole
     filter: `new List<Foo>()` is discarded because `List` is not a solution `api_client`. A type
     argument that is a **generic type parameter in scope** (the method's own or an enclosing type's) is
     **not** a request type and is excluded — `new BaseRequest<TRequest>()` inside
@@ -373,6 +380,10 @@ Unknown config keys are a warning, not an error (forward compatibility).
 - `user_version = 4` — adds the `endpoints` table and `calls_endpoint` edges (slice 4): the HTTP
   verb + route templates test code calls, tying scenarios to the APIs they exercise. Migration:
   re-run `codemap index`.
+- `user_version = 5` — adds nullable `path` + `target_api` columns to `endpoints` (slice 5): an
+  operation's statically-recovered real route and API bucket, read from the request type's
+  `ServiceName`/`Method` getters. A v4 map has neither column; readers select them only when present,
+  so v4 maps still load. Migration: re-run `codemap index`.
 
 ## 10. Performance targets
 

@@ -29,8 +29,8 @@ public sealed record ScenarioRow(int Id, int FeatureId, int ProjectId, string Na
 public sealed record ScenarioStepRow(int Id, int ScenarioId, int ProjectId, string Keyword, string Text,
     int Ordinal, bool HasDocString, bool HasDataTable, string FilePath, int LineStart);
 
-/// <summary>A projected endpoint row (spec §5.1, slice 4).</summary>
-public sealed record EndpointRow(int Id, string Verb, string Route);
+/// <summary>A projected endpoint row (spec §5.1, slice 4; Path/TargetApi added in slice 5).</summary>
+public sealed record EndpointRow(int Id, string Verb, string Route, string? Path = null, string? TargetApi = null);
 
 /// <summary>A projected edge row.</summary>
 public sealed record EdgeRow(string FromKind, int FromId, string ToKind, int? ToId, string EdgeKind, string? Confidence);
@@ -260,6 +260,16 @@ public static class MapReader
         return cmd.ExecuteScalar() is not null;
     }
 
+    private static bool ColumnExists(SqliteConnection conn, string table, string column)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info({table});";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+            if (string.Equals(r.GetString(1), column, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     private static List<StepDefinitionRow> ReadStepDefinitions(SqliteConnection conn)
     {
         var list = new List<StepDefinitionRow>();
@@ -332,11 +342,16 @@ public static class MapReader
     {
         var list = new List<EndpointRow>();
         if (!TableExists(conn, "endpoints")) return list; // tolerate pre-v4 maps
+        var enriched = ColumnExists(conn, "endpoints", "path"); // v5+ carries path/target_api
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT id, verb, route FROM endpoints ORDER BY id;";
+        cmd.CommandText = enriched
+            ? "SELECT id, verb, route, path, target_api FROM endpoints ORDER BY id;"
+            : "SELECT id, verb, route FROM endpoints ORDER BY id;";
         using var r = cmd.ExecuteReader();
         while (r.Read())
-            list.Add(new EndpointRow(r.GetInt32(0), r.GetString(1), r.GetString(2)));
+            list.Add(new EndpointRow(r.GetInt32(0), r.GetString(1), r.GetString(2),
+                enriched && !r.IsDBNull(3) ? r.GetString(3) : null,
+                enriched && !r.IsDBNull(4) ? r.GetString(4) : null));
         return list;
     }
 

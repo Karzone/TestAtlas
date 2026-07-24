@@ -411,7 +411,9 @@ public static class HtmlReportBuilder
     /// reverse blast radius — how many test scenarios reach it — so a breaking API change is a glance,
     /// not a query. Two shapes share the table: URL <b>routes</b> (verb + path, e.g. <c>POST
     /// /api/orders</c>) and <b>operations</b> (a typed request the framework maps to a URL internally,
-    /// e.g. <c>GetUserconfigurationRequest</c>); the verb of an operation is inferred from its name.
+    /// e.g. <c>GetUserconfigurationRequest</c>). When the request type statically declared its route,
+    /// the real path (+ API bucket) shows beneath the type name and the verb is the declared one;
+    /// otherwise the verb is inferred from the type name.
     /// </summary>
     private static void AppendEndpoints(StringBuilder sb, MapDocument doc,
         IReadOnlyDictionary<int, ImpactAnalyzer.EndpointReach> reach)
@@ -451,7 +453,18 @@ public static class HtmlReportBuilder
             var op = IsOperation(ep.Route);
             sb.Append("<tr><td><span class=\"verb ").Append(VerbClass(ep.Verb)).Append("\">")
               .Append(E(ep.Verb)).Append("</span></td>");
-            sb.Append("<td class=\"mono ep-route\">").Append(E(ep.Route)).Append("</td>");
+            // When the request type statically declared its route, show the real path with the request
+            // type (and its API bucket) beneath; otherwise the route/type name alone.
+            if (ep.Path is { Length: > 0 } path)
+            {
+                sb.Append("<td class=\"ep-route\"><span class=\"mono ep-path\">").Append(E(path)).Append("</span>")
+                  .Append("<span class=\"ep-req\">").Append(E(ep.Route));
+                if (ep.TargetApi is { Length: > 0 } api)
+                    sb.Append(" <span class=\"ep-api\">").Append(E(api)).Append("</span>");
+                sb.Append("</span></td>");
+            }
+            else
+                sb.Append("<td class=\"mono ep-route\">").Append(E(ep.Route)).Append("</td>");
             sb.Append("<td><span class=\"chip").Append(op ? " op" : "").Append("\">")
               .Append(op ? "operation" : "route").Append("</span></td>");
             sb.Append("<td class=\"num\">").Append(r.CallSiteCount).Append("</td>");
@@ -671,6 +684,10 @@ public static class HtmlReportBuilder
         .grid.ep th:nth-child(3),.grid.ep td:nth-child(3){width:96px}
         .grid.ep td.num{width:110px}
         .ep-route{overflow-wrap:anywhere;word-break:break-word;color:var(--ink)}
+        .ep-path{display:block;color:var(--ink)}
+        .ep-req{display:block;font-size:11px;color:var(--faint);margin-top:3px}
+        .ep-api{display:inline-block;font-family:var(--mono);font-size:10px;color:var(--dim);
+        border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-left:4px}
         .verb{display:inline-block;font-family:var(--mono);font-size:10.5px;font-weight:700;letter-spacing:.4px;
         border-radius:5px;padding:2px 6px;border:1px solid;min-width:44px;text-align:center}
         .verb.get{color:var(--bound);border-color:var(--bound);background:color-mix(in srgb,var(--bound) 10%,transparent)}

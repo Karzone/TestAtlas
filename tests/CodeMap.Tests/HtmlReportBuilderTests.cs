@@ -237,7 +237,8 @@ public sealed class HtmlReportBuilderTests
         Endpoints = new[]
         {
             new EndpointRow(1, "POST", "/api/orders"),
-            new EndpointRow(2, "GET", "GetSupplierRequest"),
+            // A resolved operation: real route + API bucket recovered from the request descriptor.
+            new EndpointRow(2, "GET", "GetSupplierRequest", "api/suppliers/{0}", "SupplierBff"),
         },
         Edges = new[]
         {
@@ -263,6 +264,11 @@ public sealed class HtmlReportBuilderTests
         Assert.Contains("GetSupplierRequest", html);
         Assert.Contains("verb post", html);
         Assert.Contains("verb get", html);
+
+        // A resolved operation surfaces its real route + API bucket beneath the request type name.
+        Assert.Contains("ep-path\">api/suppliers/{0}<", html);   // real route (template kept verbatim)
+        Assert.Contains("ep-api\">SupplierBff<", html);          // the logical API bucket
+        Assert.Contains("ep-req\">GetSupplierRequest", html);    // the request type still shown as the key
 
         // The URL is a "route"; the typed request is an "operation".
         Assert.Contains(">route<", html);

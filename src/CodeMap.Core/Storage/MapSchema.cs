@@ -8,7 +8,10 @@ namespace TestAtlas.Core.Storage;
 public static class MapSchema
 {
     // v4 (slice 4): adds the endpoints table + calls_endpoint edges (HTTP calls in test code).
-    public const int Version = 4;
+    // v5 (slice 5): endpoints gain nullable path + target_api — an operation's statically-recovered
+    //   real route (from the request type's ServiceName/Resource getter) and logical API bucket. A v4
+    //   map has neither column; readers tolerate its absence (the reader selects them only when present).
+    public const int Version = 5;
 
     /// <summary>DDL for a fresh map file. Ordered; safe to run inside one transaction.</summary>
     public const string CreateSql = """
@@ -98,9 +101,11 @@ public static class MapSchema
         );
 
         CREATE TABLE endpoints (
-            id    INTEGER PRIMARY KEY,
-            verb  TEXT NOT NULL,
-            route TEXT NOT NULL
+            id         INTEGER PRIMARY KEY,
+            verb       TEXT NOT NULL,
+            route      TEXT NOT NULL,
+            path       TEXT,
+            target_api TEXT
         );
 
         CREATE TABLE edges (

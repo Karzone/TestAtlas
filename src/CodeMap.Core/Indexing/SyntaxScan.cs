@@ -432,6 +432,55 @@ internal static class SyntaxScan
             ? ma.Name.Identifier.ValueText.ToUpperInvariant()
             : null;
 
+    // Conventional property names a request-descriptor uses for its route and its logical API bucket.
+    // Detection keys on the universal signal (a getter returning a RestSharp/System.Net Method member),
+    // so this generalises past any one framework's interface name; the name sets just say which string
+    // getter is the route vs the API.
+    private static readonly HashSet<string> RouteProps = new(StringComparer.Ordinal)
+        { "ServiceName", "Resource", "Route", "Path", "Endpoint", "Url", "Uri", "RequestUri", "Address" };
+    private static readonly HashSet<string> TargetApiProps = new(StringComparer.Ordinal)
+        { "TargetAPI", "TargetApi", "Api", "ApiName", "Host", "BaseUrl", "BaseAddress" };
+
+    /// <summary>
+    /// If a type is a <b>request descriptor</b> — a class exposing its HTTP verb as a getter returning a
+    /// <c>Method</c>/<c>HttpMethod</c> member <b>and</b> its route as a string-literal getter
+    /// (<c>ServiceName</c>/<c>Resource</c>/…) — return the statically-recovered
+    /// <c>(Verb, Route, TargetApi)</c>. Reads the getter's <b>return expression</b>
+    /// (<c>get { return "…"; }</c> or <c>=> "…"</c>), never a field or attribute. A route template
+    /// (<c>".../{0}/submit"</c>) is returned verbatim — the concrete id isn't statically known. Null
+    /// when the type is not a request descriptor.
+    /// </summary>
+    public static (string Verb, string Route, string? TargetApi)? RequestEndpointOf(TypeDeclarationSyntax type)
+    {
+        string? verb = null, route = null, targetApi = null;
+        foreach (var prop in type.Members.OfType<PropertyDeclarationSyntax>())
+        {
+            var expr = GetterReturnExpression(prop);
+            if (expr is null) continue;
+            var name = prop.Identifier.ValueText;
+            if (verb is null && VerbFromMemberAccess(expr) is { } v) verb = v;
+            if (route is null && RouteProps.Contains(name) && StringLiteralOf(expr) is { } r) route = r;
+            if (targetApi is null && TargetApiProps.Contains(name) && StringLiteralOf(expr) is { } t) targetApi = t;
+        }
+        return verb is not null && route is not null ? (verb, route, targetApi) : null;
+    }
+
+    /// <summary>The expression a property getter returns: expression-bodied property, expression-bodied
+    /// getter, or the first <c>return</c> in a block getter. Null if it has no readable getter.</summary>
+    private static ExpressionSyntax? GetterReturnExpression(PropertyDeclarationSyntax p)
+    {
+        if (p.ExpressionBody is { } propBody) return propBody.Expression;              // string X => "…";
+        var getter = p.AccessorList?.Accessors.FirstOrDefault(a => a.IsKind(SyntaxKind.GetAccessorDeclaration));
+        if (getter is null) return null;
+        if (getter.ExpressionBody is { } getBody) return getBody.Expression;           // get => "…";
+        return getter.Body?.Statements.OfType<ReturnStatementSyntax>().FirstOrDefault()?.Expression; // get { return "…"; }
+    }
+
+    /// <summary>The literal value of a string-literal expression, else null (interpolations excluded).</summary>
+    private static string? StringLiteralOf(ExpressionSyntax expr)
+        => expr is LiteralExpressionSyntax lit && lit.IsKind(SyntaxKind.StringLiteralExpression)
+            ? lit.Token.ValueText : null;
+
     /// <summary>const / static readonly string fields of the containing class → name → value.</summary>
     private static Dictionary<string, string> ConstStrings(TypeDeclarationSyntax? type)
     {

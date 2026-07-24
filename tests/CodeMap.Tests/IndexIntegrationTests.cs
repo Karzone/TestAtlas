@@ -237,13 +237,16 @@ public sealed class IndexIntegrationTests : IClassFixture<IndexedFixtureSolution
     }
 
     [Fact]
-    public void Operation_level_endpoint_is_keyed_on_the_request_type_with_an_inferred_verb()
+    public void Operation_level_endpoint_is_keyed_on_the_request_type_with_its_declared_route_and_verb()
     {
-        // The URL is hidden inside GetSupplierRequest; the operation is keyed on the type name (never
-        // a '/'-path) and the verb is inferred from the leading verb word ("Get…" → GET).
+        // The operation is keyed on the request type name (never a '/'-path). GetSupplierRequest is a
+        // request descriptor, so its declared route/verb/API resolve statically: the verb is the real
+        // Method (GET), and Path/TargetApi carry the route template + API bucket read from the getters.
         var op = _fx.Doc.Endpoints.Single(e => e.Route == "GetSupplierRequest");
         Assert.Equal("GET", op.Verb);
         Assert.DoesNotContain('/', op.Route); // structurally distinguishes operations from URL routes
+        Assert.Equal("api/suppliers/{0}", op.Path);   // real route, {0} template kept verbatim
+        Assert.Equal("SupplierBff", op.TargetApi);
 
         // It is tied to its call site — the step that constructed the typed request.
         var given = _fx.Doc.Methods.Single(m => m.Name == "GivenACartWith");

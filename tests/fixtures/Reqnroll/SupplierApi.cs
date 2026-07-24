@@ -19,10 +19,21 @@ namespace Fixture.Reqnroll
         public string Execute() => _client.ToString();
     }
 
-    // The typed request that names the operation. Plain data, classified `other`; its NAME is what the
-    // operation-level endpoint is keyed on. Method count 0.
+    // A RestSharp-style HTTP method shim (the real solution uses RestSharp.Method); a local enum keeps
+    // the fixture self-contained and syntax-parseable without a package reference.
+    public enum Method { GET, POST, PUT, DELETE }
+
+    // The typed request that names the operation. It is a *request descriptor*: it declares its own
+    // route, verb, and API bucket as constant-returning getters (the real 1FAT shape). Extraction reads
+    // the getter RETURN expressions — so the operation endpoint surfaces the real GET api/suppliers/{0}
+    // (a {0} route template, kept verbatim) on the "SupplierBff" API, not just the type name. Still
+    // classified `other` (plain data; the Method type is not an HTTP-client marker). Method count 0.
     public class GetSupplierRequest
     {
+        public string TargetAPI   { get { return "SupplierBff"; } }
+        public string ServiceName { get { return "api/suppliers/{0}"; } }
+        public Method Method      { get { return Method.GET; } }
+
         public int SupplierId { get; set; }
     }
 

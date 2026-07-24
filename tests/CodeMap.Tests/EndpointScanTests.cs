@@ -203,6 +203,57 @@ public sealed class EndpointScanTests
         Assert.Equal(("BaseRequest", "GetSupplierRequest"), Assert.Single(SyntaxScan.GenericOperationCandidates(method2)));
     }
 
+    // ---- request descriptors: route/verb/API read from the request type's getters (slice 5) ---------
+
+    private static (string Verb, string Route, string? TargetApi)? RequestEndpoint(string classSrc)
+    {
+        var type = CSharpSyntaxTree.ParseText(classSrc).GetRoot()
+            .DescendantNodes().OfType<TypeDeclarationSyntax>().First();
+        return SyntaxScan.RequestEndpointOf(type);
+    }
+
+    [Fact]
+    public void Request_descriptor_block_getters_yield_route_verb_and_api()
+    {
+        // The real 1FAT shape: constant-returning block getters. The {0} template is kept verbatim.
+        var re = RequestEndpoint("""
+            public class PostSubmitRequest
+            {
+                public string TargetAPI   { get { return "MotorBff"; } }
+                public string ServiceName { get { return "/api/gateway/fnol/{0}/submit"; } }
+                public Method Method      { get { return Method.POST; } }
+            }
+            """);
+        Assert.NotNull(re);
+        Assert.Equal(("POST", "/api/gateway/fnol/{0}/submit", "MotorBff"),
+            (re!.Value.Verb, re.Value.Route, re.Value.TargetApi));
+    }
+
+    [Fact]
+    public void Request_descriptor_reads_expression_bodied_getters_and_tolerates_a_missing_api()
+    {
+        var re = RequestEndpoint("""
+            public class GetDefinitionRequestBff
+            {
+                public string ServiceName => "api/gateway/estimate/definition/section/list";
+                public Method Method => Method.POST;
+            }
+            """);
+        Assert.NotNull(re);
+        Assert.Equal("POST", re!.Value.Verb);
+        Assert.Equal("api/gateway/estimate/definition/section/list", re.Value.Route);
+        Assert.Null(re.Value.TargetApi); // no TargetAPI getter — still a descriptor, just no API bucket
+    }
+
+    [Fact]
+    public void A_type_without_a_method_getter_is_not_a_request_descriptor()
+    {
+        // The verb getter (a Method/HttpMethod member) is the decisive signal — a route string alone,
+        // or a plain data class, is not a request descriptor.
+        Assert.Null(RequestEndpoint("public class Config { public string ServiceName => \"api/x\"; public int Timeout => 30; }"));
+        Assert.Null(RequestEndpoint("public class Dto { public int Id { get; set; } public string Name { get; set; } }"));
+    }
+
     [Theory]
     [InlineData("GetUserRequest", "GET")]
     [InlineData("FetchOrdersQuery", "GET")]

@@ -315,11 +315,13 @@ public static class SqliteMapWriter
     {
         using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
-        cmd.CommandText = "INSERT INTO endpoints(id, verb, route) VALUES ($id,$v,$r);";
+        cmd.CommandText = "INSERT INTO endpoints(id, verb, route, path, target_api) VALUES ($id,$v,$r,$p,$t);";
         var id = Add(cmd, "$id"); var v = Add(cmd, "$v"); var r = Add(cmd, "$r");
+        var p = Add(cmd, "$p"); var t = Add(cmd, "$t");
         foreach (var e in endpoints)
         {
             id.Value = e.Id; v.Value = e.Verb; r.Value = e.Route;
+            p.Value = (object?)e.Path ?? DBNull.Value; t.Value = (object?)e.TargetApi ?? DBNull.Value;
             cmd.ExecuteNonQuery();
         }
     }

@@ -215,6 +215,13 @@ public sealed class SolutionIndexer
         var apiClientNames = new HashSet<string>(
             allClasses.Where(c => c.Kind == Kinds.ApiClient).Select(c => c.Name), StringComparer.Ordinal);
 
+        // Request descriptors: request-type name → its statically-declared (verb, route, target api). Lets
+        // an operation surface the real POST /api/… route + verb instead of only the type name + guess.
+        var requestEndpoints = new Dictionary<string, (string Verb, string Route, string? TargetApi)>(StringComparer.Ordinal);
+        foreach (var ch in allClasses)
+            if (ch.RequestEndpoint is { } re)
+                requestEndpoints[ch.Name] = re;
+
         // ---- Assign deterministic IDs in canonical order ----
         var projects = new List<ProjectEntity>();
         var classes = new List<ClassEntity>();
@@ -284,10 +291,15 @@ public sealed class SolutionIndexer
 
                     // Operation-level endpoints: a request type handed to an HTTP-executing generic
                     // wrapper. The request-type name is the operation identity (no URL at the call
-                    // site); the verb is inferred from its leading verb word (spec §5.1).
+                    // site). The verb is the request descriptor's real Method when it declares one,
+                    // else inferred from the leading verb word (spec §5.1).
                     foreach (var (wrapper, request) in mh.OperationCandidates)
                         if (apiClientNames.Contains(wrapper))
-                            methodEndpointCalls.Add((mid, SyntaxScan.VerbFromOperationName(request), request));
+                        {
+                            var verb = requestEndpoints.TryGetValue(request, out var re)
+                                ? re.Verb : SyntaxScan.VerbFromOperationName(request);
+                            methodEndpointCalls.Add((mid, verb, request));
+                        }
 
                     foreach (var sb in mh.StepBindings
                         .OrderBy(s => s.Keyword, StringComparer.Ordinal)
@@ -346,7 +358,14 @@ public sealed class SolutionIndexer
             .Distinct()
             .OrderBy(e => e.Route, StringComparer.Ordinal)
             .ThenBy(e => e.Verb, StringComparer.Ordinal)
-            .Select((e, i) => new EndpointEntity(i + 1, e.Verb, e.Route))
+            .Select((e, i) =>
+            {
+                // e.Route is the operation's request-type name; enrich it with the descriptor's real
+                // route + API bucket when that type declared them (null for URL-route endpoints).
+                var (path, targetApi) = requestEndpoints.TryGetValue(e.Route, out var re)
+                    ? (re.Route, re.TargetApi) : (null, null);
+                return new EndpointEntity(i + 1, e.Verb, e.Route, path, targetApi);
+            })
             .ToList();
         var endpointId = endpoints.ToDictionary(e => (e.Verb, e.Route), e => e.Id);
         edges.AddRange(methodEndpointCalls
@@ -533,6 +552,7 @@ public sealed class SolutionIndexer
                     Namespace = ResolveNamespace(type),
                     BaseType = type.BaseList?.Types.FirstOrDefault()?.Type.ToString(),
                     Facts = SyntaxScan.GatherClassFacts(type),
+                    RequestEndpoint = SyntaxScan.RequestEndpointOf(type),
                     FilePath = relDoc,
                     LineStart = tree.GetLineSpan(type.Identifier.Span).StartLinePosition.Line + 1,
                     LineEnd = tree.GetLineSpan(type.Span).EndLinePosition.Line + 1,
@@ -743,6 +763,7 @@ public sealed class SolutionIndexer
         public string? BaseType;
         public string Kind = Kinds.Other;
         public ClassFacts? Facts;
+        public (string Verb, string Route, string? TargetApi)? RequestEndpoint; // set when the type is a request descriptor
         public string FilePath = string.Empty;
         public int LineStart;
         public int LineEnd;
