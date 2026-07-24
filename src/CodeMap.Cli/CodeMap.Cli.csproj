@@ -13,6 +13,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>testatlas</ToolCommandName>
     <PackageId>TestAtlas.Cli</PackageId>
+    <Description>TestAtlas CLI (`testatlas`) — statically analyses a .NET test-automation solution and emits a queryable semantic map as a single SQLite file: projects and their dependency edges, Gherkin features/scenarios/steps, step-definition bindings, page objects, API clients, and the call/usage edges between them. Then answers questions over the map — search, change-impact (blast radius), a self-contained HTML report and dependency graph, and stats. Offline, deterministic, zero-config.</Description>
   </PropertyGroup>
 
   <ItemGroup>

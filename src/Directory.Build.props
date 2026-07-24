@@ -1,0 +1,30 @@
+<Project>
+
+  <!--
+    Shared NuGet package metadata for the three shipped projects (Cli, Mcp, Core).
+    Lives under src/ so the samples/, tests/, and fixtures/ projects do NOT inherit it.
+    Per-package <Description> lives in each project's own .csproj.
+  -->
+  <PropertyGroup>
+    <Version>0.1.0</Version>
+    <Authors>Karthik Kalaiyarasu</Authors>
+    <Company>Karthik Kalaiyarasu</Company>
+    <Copyright>Copyright (c) 2026 Karthik Kalaiyarasu</Copyright>
+
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/Karzone/TestAtlas</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/Karzone/TestAtlas</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>dotnet;testing;test-automation;reqnroll;specflow;gherkin;bdd;roslyn;static-analysis;mcp;sqlite;codemap</PackageTags>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+  <!-- Embed the repo-root README into every package (path is absolute, so it resolves from any project under src/). -->
+  <ItemGroup>
+    <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
+  </ItemGroup>
+
+</Project>

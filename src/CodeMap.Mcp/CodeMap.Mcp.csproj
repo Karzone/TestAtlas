@@ -14,6 +14,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>testatlas-mcp</ToolCommandName>
     <PackageId>TestAtlas.Mcp</PackageId>
+    <Description>TestAtlas MCP server (`testatlas-mcp`) — serves a TestAtlas semantic map of a .NET test-automation solution to an AI agent over stdio (hand-rolled JSON-RPC, zero MCP-SDK dependency). Read-only and offline. Exposes tools to search steps and scenarios, compute change impact, list endpoints, and read map stats — so an agent can navigate a test codebase without stuffing files into context.</Description>
   </PropertyGroup>
 
   <ItemGroup>
