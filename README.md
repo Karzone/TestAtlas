@@ -165,13 +165,38 @@ TestAtlas ships an MCP server — `testatlas-mcp` — that serves the map to any
 exact, structured answer straight from the `.db` — instead of stuffing source files into its
 context window.
 
+**Option A — no install** (register the built binary directly):
+
 ```bash
-# install the server, then register it against a map
-dotnet tool install --global TestAtlas.Mcp
+dotnet build src/CodeMap.Mcp -c Release
+# on Windows the binary is TestAtlas.Mcp.exe; on macOS/Linux it's TestAtlas.Mcp
+claude mcp add testatlas -- src/CodeMap.Mcp/bin/Release/net8.0/TestAtlas.Mcp.exe path/to/codemap.db
+```
+
+**Option B — install as a global tool** (`testatlas-mcp`), then register that:
+
+```bash
+dotnet pack src/CodeMap.Mcp -c Release
+dotnet tool install --global --add-source ./nupkg TestAtlas.Mcp
 claude mcp add testatlas -- testatlas-mcp path/to/codemap.db
 ```
 
+Verify it connected, then use it:
+
+```bash
+claude mcp list        # the testatlas row should read: ✔ Connected
+```
+
+By default the server is registered for the **current project** (`--scope local`). Add
+`--scope user` to make it available in every project on your machine, or `--scope project` to
+share the registration with your team via a committed `.mcp.json`. A user-scoped registration
+pins one `codemap.db`, so per-project registration is usually the better fit across many solutions.
+
 **Tools exposed:** `stats` · `impact` · `search_steps` · `search_scenarios` · `list_endpoints`
+
+> [!IMPORTANT]
+> MCP clients load servers **at session start**. If you register the server mid-session, restart
+> your Claude Code / agent session before the `testatlas` tools appear.
 
 > [!TIP]
 > Retrieval runs locally against the SQLite file — **deterministic, offline, and a few hundred
