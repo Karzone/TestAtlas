@@ -118,7 +118,11 @@ and line locations.
     **request type is the operation identity** (route = `GetUserRequest`); the verb is inferred from
     the leading verb word of the name (`Get…` → GET, `Create…`/`Add…`/`Submit…` → POST, `Update…` →
     PUT, `Delete…`/`Remove…` → DELETE, else `ANY`, never a guess). The `api_client` gate is the whole
-    filter: `new List<Foo>()` is discarded because `List` is not a solution `api_client`.
+    filter: `new List<Foo>()` is discarded because `List` is not a solution `api_client`. A type
+    argument that is a **generic type parameter in scope** (the method's own or an enclosing type's) is
+    **not** a request type and is excluded — `new BaseRequest<TRequest>()` inside
+    `RequestAsync<TRequest>()` names the parameter, not an operation, so the generic plumbing
+    (`BaseApiService`) never surfaces as a phantom endpoint.
 
   Fully dynamic URLs / unclassified wrappers degrade to nothing, never an error. Call sites become
   `calls_endpoint` edges either way, so `impact --endpoint` and the report's blast radius are uniform.

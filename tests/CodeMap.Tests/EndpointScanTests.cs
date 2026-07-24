@@ -157,6 +157,52 @@ public sealed class EndpointScanTests
     public void Non_single_type_argument_constructions_are_ignored(string body)
         => Assert.Empty(Operations(body));
 
+    [Fact]
+    public void A_type_parameter_in_scope_is_not_a_request_type()
+    {
+        // The BaseApiService plumbing shape: `new BaseRequest<TRequest>()` inside a generic method whose
+        // own type parameter is TRequest. TRequest is the parameter, not a concrete request — so it must
+        // NOT surface as an operation. (Before the type-parameter guard this leaked `TRequest` as a
+        // phantom endpoint with a huge blast radius.)
+        var src = """
+            class BaseApiService
+            {
+                Task RequestAsync<TRequest, TResponse>(TRequest request)
+                    where TRequest : IBaseRequestModel, new()
+                { _ = new BaseRequest<TRequest>(); return Task.CompletedTask; }
+            }
+            """;
+        var method = CSharpSyntaxTree.ParseText(src).GetRoot()
+            .DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+        Assert.Empty(SyntaxScan.GenericOperationCandidates(method));
+    }
+
+    [Fact]
+    public void An_enclosing_types_type_parameter_is_also_excluded()
+    {
+        // The type param can be declared on the containing class, not the method — still not a request.
+        var src = """
+            class Repository<TEntity>
+            {
+                void Load() { _ = new BaseRequest<TEntity>(); }
+            }
+            """;
+        var method = CSharpSyntaxTree.ParseText(src).GetRoot()
+            .DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+        Assert.Empty(SyntaxScan.GenericOperationCandidates(method));
+
+        // …but a concrete type argument in that same class is still a real candidate.
+        var src2 = """
+            class Repository<TEntity>
+            {
+                void Load() { _ = new BaseRequest<GetSupplierRequest>(); }
+            }
+            """;
+        var method2 = CSharpSyntaxTree.ParseText(src2).GetRoot()
+            .DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+        Assert.Equal(("BaseRequest", "GetSupplierRequest"), Assert.Single(SyntaxScan.GenericOperationCandidates(method2)));
+    }
+
     [Theory]
     [InlineData("GetUserRequest", "GET")]
     [InlineData("FetchOrdersQuery", "GET")]

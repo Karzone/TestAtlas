@@ -203,11 +203,24 @@ public sealed class HtmlReportBuilderTests
     {
         UserVersion = MapSchema.Version,
         Classes = new[] { new ClassRow(1, 1, "OrderSteps", "N", null, Kinds.StepClass, "S.cs", 1, 9) },
-        Methods = new[] { new MethodRow(1, 1, 1, "WhenOrdering", "WhenOrdering()", "public", Kinds.StepDefinitionMethod, "S.cs", 3, 5) },
-        StepDefinitions = new[] { new StepDefinitionRow(1, 1, 1, 1, "When", "ordering", ExpressionKinds.Regex, "", "S.cs", 3) },
+        Methods = new[]
+        {
+            new MethodRow(1, 1, 1, "WhenOrdering", "WhenOrdering()", "public", Kinds.StepDefinitionMethod, "S.cs", 3, 5),
+            new MethodRow(2, 1, 1, "WhenPaying", "WhenPaying()", "public", Kinds.StepDefinitionMethod, "S.cs", 6, 8),
+        },
+        StepDefinitions = new[]
+        {
+            new StepDefinitionRow(1, 1, 1, 1, "When", "ordering", ExpressionKinds.Regex, "", "S.cs", 3),
+            new StepDefinitionRow(2, 2, 1, 1, "When", "paying", ExpressionKinds.Regex, "", "S.cs", 6), // MethodId=2
+        },
         Features = new[] { new FeatureRow(1, 1, "Orders", "d", "", "Orders.feature") },
         Scenarios = new[] { new ScenarioRow(1, 1, 1, "Place order", "scenario", "", 0, "Orders.feature", 3) },
-        ScenarioSteps = new[] { new ScenarioStepRow(1, 1, 1, "When", "ordering", 0, false, false, "Orders.feature", 4) },
+        // Two connecting steps into the /api/orders endpoint, so its drill-down lists a multi-via scenario.
+        ScenarioSteps = new[]
+        {
+            new ScenarioStepRow(1, 1, 1, "When", "ordering", 0, false, false, "Orders.feature", 4),
+            new ScenarioStepRow(2, 1, 1, "When", "paying", 1, false, false, "Orders.feature", 5),
+        },
         Endpoints = new[]
         {
             new EndpointRow(1, "POST", "/api/orders"),
@@ -216,7 +229,9 @@ public sealed class HtmlReportBuilderTests
         Edges = new[]
         {
             new EdgeRow(RefKinds.ScenarioStep, 1, RefKinds.StepDefinition, 1, EdgeKinds.BindsTo, BindConfidence.Exact),
+            new EdgeRow(RefKinds.ScenarioStep, 2, RefKinds.StepDefinition, 2, EdgeKinds.BindsTo, BindConfidence.Exact),
             new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 1, EdgeKinds.CallsEndpoint, ""),
+            new EdgeRow(RefKinds.Method, 2, RefKinds.Endpoint, 1, EdgeKinds.CallsEndpoint, ""), // 2nd call site into /api/orders
             new EdgeRow(RefKinds.Method, 1, RefKinds.Endpoint, 2, EdgeKinds.CallsEndpoint, ""),
         },
     };
@@ -255,12 +270,18 @@ public sealed class HtmlReportBuilderTests
         Assert.Contains("function toggleEp", html); // the reveal script is wired in
 
         // Vacuity, scoped to the endpoints panel (the Features tree also names the scenario): the detail
-        // lists the real feature → scenario → connecting step, not just a count.
+        // lists the real feature → scenario → connecting step, grouped into a per-feature card, not just a count.
         var epPanel = Between(html, "<h2>API endpoints</h2>", "<h2>Features</h2>");
-        Assert.Contains("Place order", epPanel);   // the reached scenario
-        Assert.Contains("via ordering", epPanel);  // the step text that connects it
-        Assert.Contains(">Orders<", epPanel);      // the feature grouping label
-        Assert.Contains("scenario across", epPanel); // the detail header ("1 scenario across 1 feature")
+        Assert.Contains("ep-scn-name\">Place order<", epPanel); // the reached scenario
+        Assert.Contains("ep-fg-name\">Orders<", epPanel);       // the feature-group card label
+        Assert.Contains("scenario across", epPanel);            // the detail header ("1 scenario across 1 feature")
+
+        // /api/orders is reached via two steps — the via list joins with real <b> markup, not the
+        // double-encoded "&lt;/b&gt;" that a re-escaped separator would produce.
+        Assert.Contains("via <b>ordering</b>, <b>paying</b>", epPanel);
+        Assert.DoesNotContain("&lt;/b&gt;", epPanel);
+        // GetSupplierRequest is reached via one step — single, un-joined.
+        Assert.Contains("via <b>ordering</b></span>", epPanel);
     }
 
     [Fact]

@@ -455,30 +455,35 @@ public static class HtmlReportBuilder
     /// </summary>
     private static void AppendEndpointDetail(StringBuilder sb, IReadOnlyList<AffectedScenario> scenarios)
     {
-        sb.Append("<tr class=\"ep-det\" hidden><td colspan=\"5\">");
+        sb.Append("<tr class=\"ep-det\" hidden><td colspan=\"5\"><div class=\"ep-det-body\">");
 
         var featureCount = scenarios.Select(s => s.Feature).Distinct().Count();
-        sb.Append("<div class=\"ep-det-head\">").Append(scenarios.Count)
-          .Append(" scenario").Append(scenarios.Count == 1 ? "" : "s").Append(" across ")
-          .Append(featureCount).Append(" feature").Append(featureCount == 1 ? "" : "s");
+        sb.Append("<div class=\"ep-det-head\">").Append("<b>").Append(scenarios.Count)
+          .Append("</b> scenario").Append(scenarios.Count == 1 ? "" : "s").Append(" across <b>")
+          .Append(featureCount).Append("</b> feature").Append(featureCount == 1 ? "" : "s");
         if (scenarios.Count > MaxScenariosPerEndpoint)
-            sb.Append(" — showing the first ").Append(MaxScenariosPerEndpoint)
-              .Append(" (full list via <span class=\"mono\">impact --endpoint</span>)");
+            sb.Append(" · showing the first ").Append(MaxScenariosPerEndpoint)
+              .Append(", full list via <span class=\"mono\">impact --endpoint</span>");
         sb.Append("</div>");
 
         foreach (var group in scenarios.Take(MaxScenariosPerEndpoint).GroupBy(s => s.Feature))
         {
-            sb.Append("<div class=\"ep-feat\">").Append(E(group.Key)).Append("</div><ul class=\"ep-scn\">");
-            foreach (var s in group)
+            var shownInGroup = group.ToList();
+            sb.Append("<div class=\"ep-fg\"><div class=\"ep-fg-h\"><span class=\"ep-fg-name\">")
+              .Append(E(group.Key)).Append("</span><span class=\"ep-fg-count\">").Append(shownInGroup.Count)
+              .Append(" scenario").Append(shownInGroup.Count == 1 ? "" : "s").Append("</span></div><ul class=\"ep-scn\">");
+            foreach (var s in shownInGroup)
             {
-                sb.Append("<li>").Append(E(s.Scenario));
+                sb.Append("<li><span class=\"ep-scn-name\">").Append(E(s.Scenario)).Append("</span>");
                 if (s.Via.Count > 0)
-                    sb.Append(" <span class=\"ep-via\">via ").Append(E(string.Join(", ", s.Via))).Append("</span>");
+                    // Each via step is escaped individually; the <b>…</b> wrappers are the only markup and
+                    // must NOT be re-encoded (joining escaped parts, never escaping the joined result).
+                    sb.Append("<span class=\"ep-via\">via <b>").Append(string.Join("</b>, <b>", s.Via.Select(E))).Append("</b></span>");
                 sb.Append("</li>");
             }
-            sb.Append("</ul>");
+            sb.Append("</ul></div>");
         }
-        sb.Append("</td></tr>");
+        sb.Append("</div></td></tr>");
     }
 
     // A scenario's own line can host only so many badges before it competes with its steps; the rest
@@ -654,13 +659,22 @@ public static class HtmlReportBuilder
         .ep-exp:hover{color:var(--ink)}
         .ep-caret{display:inline-block;color:var(--faint);transition:transform .15s ease}
         .ep-exp[aria-expanded="true"] .ep-caret{transform:rotate(90deg)}
-        .ep-det>td{background:var(--card);padding:12px 16px}
-        .ep-det-head{font-size:12.5px;color:var(--faint);margin-bottom:10px}
-        .ep-feat{font-weight:600;font-size:12.5px;color:var(--ink);margin:12px 0 4px}
-        .ep-feat:first-of-type{margin-top:0}
-        .ep-scn{list-style:none;margin:0 0 4px;padding:2px 0 2px 14px;border-left:2px solid var(--line)}
-        .ep-scn li{font-size:13px;color:var(--dim);padding:2px 0}
-        .ep-via{color:var(--faint);font-size:12px}
+        .ep-det>td{background:var(--bg);padding:0}
+        .ep-det-body{padding:14px 16px 16px}
+        .ep-det-head{font-size:12px;color:var(--dim);margin:0 0 12px}
+        .ep-det-head b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums}
+        .ep-det-head .mono{font-family:var(--mono);font-size:11px}
+        .ep-fg{margin:0 0 10px;background:var(--card);border:1px solid var(--line);border-radius:9px;overflow:hidden}
+        .ep-fg:last-child{margin-bottom:0}
+        .ep-fg-h{display:flex;align-items:baseline;justify-content:space-between;gap:10px;padding:8px 12px;border-bottom:1px solid var(--line)}
+        .ep-fg-name{font-weight:650;font-size:12.5px;color:var(--ink)}
+        .ep-fg-count{font-size:10.5px;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap}
+        .ep-scn{list-style:none;margin:0;padding:0}
+        .ep-scn li{padding:7px 12px}
+        .ep-scn li+li{border-top:1px solid color-mix(in srgb,var(--line) 55%,transparent)}
+        .ep-scn-name{display:block;font-size:12.5px;color:var(--ink);line-height:1.45}
+        .ep-via{display:block;font-size:11px;color:var(--faint);margin-top:2px}
+        .ep-via b{font-weight:500;color:var(--dim)}
         @media(prefers-reduced-motion:reduce){.ep-caret{transition:none}}
         details.feature{border:1px solid var(--line);border-radius:10px;margin:10px 0;overflow:hidden;background:var(--bg)}
         details.feature>summary{cursor:pointer;list-style:none;padding:12px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;

@@ -372,12 +372,32 @@ internal static class SyntaxScan
         body ??= method.ExpressionBody;
         if (body is null) return found;
 
+        // Type parameters in scope (the method's own + every enclosing type's) are NOT concrete request
+        // types: `new BaseRequest<TRequest>()` inside `RequestAsync<TRequest>()` names the parameter, not
+        // an operation. Excluding them keeps generic plumbing (e.g. BaseApiService.RequestAsync) out of
+        // the endpoint list — otherwise the literal `TRequest`/`TResponse` surfaces as a phantom endpoint
+        // with a huge, meaningless blast radius.
+        var typeParams = TypeParametersInScope(method);
+
         foreach (var oc in body.DescendantNodes().OfType<ObjectCreationExpressionSyntax>())
             if (oc.Type is GenericNameSyntax { TypeArgumentList.Arguments: { Count: 1 } targs } g
-                && targs[0] is IdentifierNameSyntax req)
+                && targs[0] is IdentifierNameSyntax req
+                && !typeParams.Contains(req.Identifier.ValueText))
                 found.Add((g.Identifier.ValueText, req.Identifier.ValueText));
 
         return found;
+    }
+
+    /// <summary>Every generic type-parameter name visible inside a method: its own plus each enclosing type's.</summary>
+    private static HashSet<string> TypeParametersInScope(MethodDeclarationSyntax method)
+    {
+        var set = new HashSet<string>(StringComparer.Ordinal);
+        if (method.TypeParameterList is { } methodTps)
+            foreach (var p in methodTps.Parameters) set.Add(p.Identifier.ValueText);
+        for (SyntaxNode? n = method.Parent; n is not null; n = n.Parent)
+            if (n is TypeDeclarationSyntax { TypeParameterList: { } typeTps })
+                foreach (var p in typeTps.Parameters) set.Add(p.Identifier.ValueText);
+        return set;
     }
 
     /// <summary>Ordered verb-word prefixes for inferring an operation's HTTP verb from its request-type name.</summary>
