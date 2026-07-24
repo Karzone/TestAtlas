@@ -370,13 +370,22 @@ Everything has a default; the file exists only to override heuristics on unusual
   "exclude": ["**/LegacyTests.csproj"],
   "pageObjectSuffixes": ["Page", "Screen", "Widget"],
   "apiClientSuffixes": ["Client", "Gateway"],
+  "uiMarkerTypes": ["IPage", "ILocator", "IWebDriver", "By", "AppiumDriver"],
+  "apiMarkerTypes": ["HttpClient", "RestClient", "IFlurlClient"],
   "classifyOverrides": [
     { "class": "MyCompany.Core.Navigator", "kind": "page_object" }
   ]
 }
 ```
 
-Unknown config keys are a warning, not an error (forward compatibility).
+The **UI / API marker type-name sets are configurable** (`ClassifierOptions.UiMarkerTypes` /
+`ApiMarkerTypes`), not just the suffixes. Built-in defaults cover Selenium (`IWebDriver`, `IWebElement`,
+`By`, `WebDriver`, `RemoteWebDriver`), Playwright (`IPage`, `ILocator`), Appium (`AppiumDriver`,
+`IOSDriver`, `AndroidDriver`), and the HTTP stacks System.Net.Http (`HttpClient`, `HttpRequestMessage`),
+RestSharp (`RestClient`/`RestRequest` + interfaces), Flurl (`IFlurlClient`/`IFlurlRequest`), and the
+ASP.NET Core test host (`WebApplicationFactory`) — a team on another stack extends the set here. Markers
+are matched in type positions only (§6). Unknown config keys are a warning, not an error (forward
+compatibility).
 
 ## 9. Output: the map file
 

@@ -13,10 +13,6 @@ namespace TestAtlas.Core.Indexing;
 internal static class SyntaxScan
 {
     // Marker type simple-names.
-    private static readonly HashSet<string> UiTypes = new(StringComparer.Ordinal)
-        { "IPage", "ILocator", "IWebDriver", "IWebElement", "By" };
-    private static readonly HashSet<string> ApiTypes = new(StringComparer.Ordinal)
-        { "RestClient", "IRestClient", "RestRequest", "IRestRequest", "HttpClient" };
 
     private static readonly HashSet<string> StepAttrs = new(StringComparer.Ordinal)
         { "Given", "When", "Then", "StepDefinition" };
@@ -68,8 +64,12 @@ internal static class SyntaxScan
             HasTestAttribute: names.Any(TestMethodAttrs.Contains));
     }
 
-    public static ClassFacts GatherClassFacts(TypeDeclarationSyntax type)
+    public static ClassFacts GatherClassFacts(TypeDeclarationSyntax type, ClassifierOptions? opts = null)
     {
+        opts ??= ClassifierOptions.Default;
+        var uiTypes = opts.UiMarkerTypes as HashSet<string> ?? opts.UiMarkerTypes.ToHashSet(StringComparer.Ordinal);
+        var apiTypes = opts.ApiMarkerTypes as HashSet<string> ?? opts.ApiMarkerTypes.ToHashSet(StringComparer.Ordinal);
+
         var classAttrs = Attributes(type.AttributeLists).Select(AttrSimpleName).ToList();
 
         var methods = type.Members.OfType<MethodDeclarationSyntax>().ToList();
@@ -83,11 +83,11 @@ internal static class SyntaxScan
             .Where(m => !HasStaticModifier(m))
             .ToList();
 
-        var uiMembers = instanceMembers.Count(m => ReferencesAny(m, UiTypes));
-        var apiMethodRefs = methods.Count(m => ReferencesAny(m, ApiTypes));
+        var uiMembers = instanceMembers.Count(m => ReferencesAny(m, uiTypes));
+        var apiMethodRefs = methods.Count(m => ReferencesAny(m, apiTypes));
 
-        var referencesUi = ReferencesAny(type, UiTypes);
-        var referencesApi = ReferencesAny(type, ApiTypes);
+        var referencesUi = ReferencesAny(type, uiTypes);
+        var referencesApi = ReferencesAny(type, apiTypes);
 
         // Simple names of every `new X()` / `new X<..>()` in the type — the signal that lets the
         // classifier propagate api_client-ness through a wrapper (a class that constructs an
@@ -105,7 +105,7 @@ internal static class SyntaxScan
         // api_client signal — and, unlike the method-ratio rule, it survives the real-world shape
         // where the client lives in a FIELD (e.g. `IRestClient _client`) driven through a variable,
         // so the marker's type name never appears in a method BODY. Fields/props + `new X()` count.
-        var holdsOrConstructsApiMarker = constructed.Any(ApiTypes.Contains) || type.Members.Any(m =>
+        var holdsOrConstructsApiMarker = constructed.Any(apiTypes.Contains) || type.Members.Any(m =>
         {
             var t = m switch
             {
@@ -113,7 +113,7 @@ internal static class SyntaxScan
                 PropertyDeclarationSyntax p => p.Type,
                 _ => (TypeSyntax?)null,
             };
-            return t is not null && TypeIdentifiers(t).Any(ApiTypes.Contains);
+            return t is not null && TypeIdentifiers(t).Any(apiTypes.Contains);
         });
 
         return new ClassFacts(

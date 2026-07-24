@@ -229,6 +229,28 @@ public sealed class EndpointScanTests
     }
 
     [Fact]
+    public void Broadened_api_markers_catch_flurl_and_http_message_shapes()
+    {
+        // Flurl and System.Net.Http types are recognised out of the box now (not just RestSharp/HttpClient).
+        var flurl = SyntaxScan.GatherClassFacts(ParseClass("class OrdersClient { private IFlurlClient _c; }"));
+        Assert.True(flurl.HoldsOrConstructsApiMarker);
+        Assert.True(flurl.ReferencesApiType);
+    }
+
+    [Fact]
+    public void Marker_type_sets_are_configurable_via_options()
+    {
+        // A team on a bespoke HTTP stack can extend/replace the API markers through ClassifierOptions.
+        var opts = new ClassifierOptions { ApiMarkerTypes = new[] { "MyBespokeHttpClient" } };
+        var custom = SyntaxScan.GatherClassFacts(ParseClass("class Foo { private MyBespokeHttpClient _c; }"), opts);
+        Assert.True(custom.HoldsOrConstructsApiMarker);
+
+        // …and under that custom set the default HttpClient is NOT a marker — proving it's really config-driven.
+        var httpUnderCustom = SyntaxScan.GatherClassFacts(ParseClass("class Bar { private HttpClient _c; }"), opts);
+        Assert.False(httpUnderCustom.HoldsOrConstructsApiMarker);
+    }
+
+    [Fact]
     public void Held_type_names_cover_field_property_return_and_param_types()
     {
         // The aggregator/DI shape a name-based construction scan misses: the collaborator is the member's

@@ -9,6 +9,25 @@ public sealed class ClassifierOptions
     public IReadOnlyList<string> PageObjectSuffixes { get; init; } = new[] { "Page", "PageObject", "Screen", "Component" };
     public IReadOnlyList<string> ApiClientSuffixes { get; init; } = new[] { "Client", "Api", "Service", "Endpoint" };
 
+    /// <summary>UI-automation marker type names (Selenium / Playwright / Appium). Matched in type
+    /// positions only (see the scanner). Overridable so teams on other stacks can extend the set.</summary>
+    public IReadOnlyCollection<string> UiMarkerTypes { get; init; } = new[]
+    {
+        "IPage", "ILocator",                                             // Playwright
+        "IWebDriver", "IWebElement", "By", "WebDriver", "RemoteWebDriver", // Selenium
+        "AppiumDriver", "IOSDriver", "AndroidDriver",                    // Appium
+    };
+
+    /// <summary>HTTP-client marker type names (System.Net.Http / RestSharp / Flurl / test host).
+    /// Matched in type positions only. Overridable for other HTTP stacks.</summary>
+    public IReadOnlyCollection<string> ApiMarkerTypes { get; init; } = new[]
+    {
+        "HttpClient", "HttpRequestMessage",                              // System.Net.Http
+        "RestClient", "IRestClient", "RestRequest", "IRestRequest",      // RestSharp
+        "IFlurlClient", "IFlurlRequest",                                 // Flurl
+        "WebApplicationFactory",                                         // ASP.NET Core test host
+    };
+
     public static readonly ClassifierOptions Default = new();
 }
 
