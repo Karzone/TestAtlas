@@ -201,7 +201,13 @@ By default the server is registered for the **current project** (`--scope local`
 share the registration with your team via a committed `.mcp.json`. A user-scoped registration
 pins one `codemap.db`, so per-project registration is usually the better fit across many solutions.
 
-**Tools exposed:** `stats` · `impact` · `search_steps` · `search_scenarios` · `list_endpoints`
+**Tools exposed:**
+
+- `stats` — summary counts: projects, classes, methods, class-kind breakdown, endpoints, and edge tallies.
+- `impact` — blast radius of a change: the scenarios affected by a given class, method, step definition, or endpoint.
+- `search_steps` — full-text search over step definitions (expression text + method + class name).
+- `search_scenarios` — full-text search over scenarios (feature + scenario name + step text + tags).
+- `list_endpoints` — the HTTP endpoints the suite calls, each with verb, route, and scenario blast radius (highest-reach first).
 
 > [!IMPORTANT]
 > MCP clients load servers **at session start**. If you register the server mid-session, restart
