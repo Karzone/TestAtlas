@@ -185,8 +185,10 @@ These exist so downstream consumers (MCP server) get indexed lexical search for 
 
 Heuristics are ordered; first match wins. Every heuristic must be overridable via config (§8).
 
-**Step class** — class carries `[Binding]` (Reqnroll or SpecFlow namespace) or contains ≥ 1
-method with a step attribute.
+**Step class** — class contains ≥ 1 method with a step attribute (`[Given]`/`[When]`/`[Then]`).
+`[Binding]` **alone is not sufficient**: it also marks hook-only classes
+(`[BeforeScenario]`/`[AfterScenario]`/…), which are **hook classes** — so a shared library that merely
+hosts a global hooks class is not promoted to `bdd_tests`.
 
 **Inheritance wins first (both collaborator kinds).** After the step-class check, a class whose base
 type is already classified as a page object → page object, or as an API client → API client, **before**

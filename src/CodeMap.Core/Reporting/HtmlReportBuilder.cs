@@ -366,7 +366,7 @@ public static class HtmlReportBuilder
         sb.Append("<details class=\"panel\" open><summary class=\"p-sum\"><h2>Collaborators</h2>");
         sb.Append("<span class=\"subtle\">").Append(pageObjects).Append(" page object").Append(pageObjects == 1 ? "" : "s");
         if (apiClients > 0) sb.Append(" · ").Append(apiClients).Append(" API client").Append(apiClients == 1 ? "" : "s");
-        if (orphans > 0) sb.Append(" · <span class=\"warn-text\">").Append(orphans).Append(" unused</span>");
+        if (orphans > 0) sb.Append(" · <span class=\"warn-text\">").Append(orphans).Append(" unreferenced</span>");
         sb.Append("</span></summary>");
 
         sb.Append("<table class=\"grid\"><thead><tr>");
@@ -385,7 +385,7 @@ public static class HtmlReportBuilder
             else if (heldIds.Contains(c.Id))
                 sb.Append("<td><span class=\"tag-held\">held</span></td>"); // referenced as a field/property type, not directly driven
             else
-                sb.Append("<td><span class=\"tag-unused\">unused</span></td>");
+                sb.Append("<td><span class=\"tag-unused\">no refs</span></td>");
             var bases = extendsByClass.TryGetValue(c.Id, out var b) ? string.Join(", ", b) : "";
             sb.Append("<td class=\"mono dim\">").Append(E(bases)).Append("</td></tr>");
         }
@@ -394,14 +394,15 @@ public static class HtmlReportBuilder
             sb.Append("<p class=\"subtle more\">… and ").Append(ranked.Count - MaxCollaboratorRows)
               .Append(" more (query the map db for the full list).</p>");
 
-        // The unused collaborators sort past the ranked cap and were invisible; list them explicitly so
-        // "N unused" is inspectable, not just a number. These are genuinely orphaned — nothing constructs
-        // them AND nothing inherits them (a class used only via DI/reflection can still be a false flag,
-        // which no syntax-only pass can see, so the wording stays "nothing references … by construction").
+        // The unreferenced collaborators sort past the ranked cap and were invisible; list them explicitly
+        // so the count is inspectable, not just a number. Wording stays conservative: "not statically
+        // observed", never "dead". Nothing in the source drives, holds, or inherits them — but a class
+        // reached only via reflection / a typeof-registry / DI-by-name can still be live, which no
+        // syntax-only pass can see, so this is a lead to check, not a verdict.
         if (unusedList.Count > 0)
         {
             sb.Append("<details class=\"unused-sec\"><summary><span class=\"warn-text\">").Append(unusedList.Count)
-              .Append(" unused</span> — no method constructs them and nothing inherits them</summary><ul class=\"unused-list\">");
+              .Append(" unreferenced</span> — not statically observed: nothing constructs, holds, or inherits them (a class reached only via reflection/DI-by-name can still be live)</summary><ul class=\"unused-list\">");
             foreach (var c in unusedList)
                 sb.Append("<li><span class=\"u-name\">").Append(E(c.Name))
                   .Append("</span><span class=\"chip\">").Append(E(c.Kind)).Append("</span></li>");

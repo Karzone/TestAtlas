@@ -17,8 +17,8 @@ public sealed class ClassifierTests
         => Classifier.ClassifyClass(f, ClassifierOptions.Default, baseKind ?? (_ => null));
 
     [Theory]
-    // step class — [Binding] or a step-attributed method
-    [InlineData("S1", true, false, 0, 0, 0, 0, 0, 0, 0, false, false, Kinds.StepClass)]
+    // step class — contains a step-attributed method ([Binding] alone is a hook class, see below)
+    [InlineData("S1", false, false, 0, 1, 0, 0, 0, 0, 0, false, false, Kinds.StepClass)]
     // page object — ≥50% of instance members reference a UI type
     [InlineData("Navigator", false, false, 0, 0, 0, 0, 2, 1, 0, false, false, Kinds.PageObject)]
     // api client — name suffix + references RestSharp/HttpClient
@@ -79,7 +79,18 @@ public sealed class ClassifierTests
 
     [Fact]
     public void Step_class_wins_over_page_object_when_both_apply()
-        => Assert.Equal(Kinds.StepClass, Classify(CF("UiSteps", binding: true, instMembers: 2, uiMembers: 2)));
+        => Assert.Equal(Kinds.StepClass, Classify(CF("UiSteps", binding: true, stepM: 1, instMembers: 2, uiMembers: 2)));
+
+    [Fact]
+    public void A_binding_class_with_only_hooks_is_a_hook_class_not_a_step_class()
+    {
+        // [Binding] also marks hook-only classes ([BeforeScenario]/[AfterScenario]/…); without a real
+        // step binding they are hook classes, so a shared library hosting a global hooks class isn't
+        // promoted to bdd_tests. (Fails on the old rule, which made any [Binding] class a step class.)
+        Assert.Equal(Kinds.HookClass, Classify(CF("GlobalHooks", binding: true, hookM: 2)));
+        // …but a [Binding] class WITH a step binding is still a step class.
+        Assert.Equal(Kinds.StepClass, Classify(CF("LoginSteps", binding: true, stepM: 3)));
+    }
 
     [Fact]
     public void Holds_a_rest_client_marker_in_a_field_so_it_is_an_api_client()

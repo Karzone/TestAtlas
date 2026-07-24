@@ -59,8 +59,12 @@ public static class Classifier
         {
             opts ??= ClassifierOptions.Default;
 
-            // 1. Step class — carries [Binding] or contains a step-attributed method.
-            if (f.HasBindingAttribute || f.StepMethodCount >= 1)
+            // 1. Step class — contains ≥1 step-attributed method. `[Binding]` alone is NOT enough: it
+            //    also marks hook-only classes ([BeforeScenario]/[AfterScenario]/…), which are hook
+            //    classes. Requiring a real step binding keeps a shared library that merely hosts a global
+            //    hooks class from being promoted to bdd_tests (a [Binding] hooks-only class falls through
+            //    to the hook-class rule below).
+            if (f.StepMethodCount >= 1)
                 return Kinds.StepClass;
 
             // 2. Inheritance is the STRONGEST collaborator signal — an explicit base already classified

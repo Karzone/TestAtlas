@@ -138,7 +138,7 @@ public sealed class HtmlReportBuilderTests
         Assert.Contains("3 page objects", html);
         // Only DeadPage is unused: BasePage is inherited by LoginPage, so it is used via inheritance,
         // not an orphan (this is the false-flag fix — the count is 1, not 2).
-        Assert.Contains("1 unused", html);
+        Assert.Contains("1 unreferenced", html);
 
         // The driven page object shows its driver count and its base (inherits).
         Assert.Contains("LoginPage", html);
