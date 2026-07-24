@@ -1,0 +1,42 @@
+name: Publish
+
+# Publishes the testatlas + testatlas-mcp NuGet packages using
+# NuGet Trusted Publishing (OIDC) — no stored API key.
+# Runs when a GitHub Release is published, or on demand from the Actions tab.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write   # required for OIDC / trusted publishing
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Pack CLI
+        run: dotnet pack src/CodeMap.Cli -c Release -o ./artifacts
+
+      - name: Pack MCP
+        run: dotnet pack src/CodeMap.Mcp -c Release -o ./artifacts
+
+      - name: NuGet login (trusted publishing)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: Karzone   # your NuGet.org account (the Package Owner)
+
+      - name: Push to NuGet.org
+        run: >
+          dotnet nuget push "artifacts/*.nupkg"
+          --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
