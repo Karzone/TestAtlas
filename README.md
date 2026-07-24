@@ -10,6 +10,7 @@
 
 <p align="center">
   <img alt="status" src="https://img.shields.io/badge/status-v0.1%20draft-orange">
+  <a href="https://www.nuget.org/packages/TestAtlas.Cli"><img alt="nuget" src="https://img.shields.io/nuget/v/TestAtlas.Cli?logo=nuget&label=NuGet&color=004880"></a>
   <img alt="dotnet" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
   <img alt="output" src="https://img.shields.io/badge/output-SQLite-003B57?logo=sqlite&logoColor=white">
   <img alt="mcp" src="https://img.shields.io/badge/MCP-ready-7C3AED">
