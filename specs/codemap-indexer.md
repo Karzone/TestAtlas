@@ -467,5 +467,6 @@ Determinism requirement: two runs on identical input produce identical row conte
 
 - **v1** — this spec: C# indexer CLI + documented schema.
 - **v1.x** — HTML visualization generated from the db. **Landed** as `testatlas report [<db>] --html`.
-- **v2** — MCP server package reading the same db; agent-wiring documentation.
+- **v2** — MCP server reading the same db. **Landed** as `testatlas-mcp` (project `CodeMap.Mcp`); see
+  `specs/codemap-mcp.md` for the tool surface + transport.
 - **Later** — second-language indexer (schema contract test), incremental indexing.

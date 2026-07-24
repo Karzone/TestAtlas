@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- v2 MCP server over a TestAtlas map. Packs as a dotnet tool: `testatlas-mcp`. Read-only, offline,
+       zero MCP-SDK dependency (hand-rolled JSON-RPC over stdio). -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>TestAtlas.Mcp</RootNamespace>
+    <AssemblyName>TestAtlas.Mcp</AssemblyName>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>testatlas-mcp</ToolCommandName>
+    <PackageId>TestAtlas.Mcp</PackageId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\CodeMap.Core\CodeMap.Core.csproj" />
+  </ItemGroup>
+
+</Project>

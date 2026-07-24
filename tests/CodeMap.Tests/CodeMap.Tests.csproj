@@ -28,6 +28,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\CodeMap.Core\CodeMap.Core.csproj" />
     <ProjectReference Include="..\..\src\CodeMap.Cli\CodeMap.Cli.csproj" />
+    <ProjectReference Include="..\..\src\CodeMap.Mcp\CodeMap.Mcp.csproj" />
   </ItemGroup>
 
 </Project>

@@ -211,8 +211,9 @@ targets, and acceptance criteria.
 ## Roadmap
 
 - [x] **Indexer CLI** — C# indexer + documented, versioned SQLite schema *(this repo, v0.1)*
-- [ ] **MCP server** — expose the map to AI agents (reads the same db)
-- [ ] **HTML visualization** — richer human-facing views generated from the db
+- [x] **HTML visualization** — self-contained report + project map generated from the db (`report` / `map`)
+- [x] **MCP server** — `testatlas-mcp` exposes the map to AI agents over stdio JSON-RPC (reads the same db); see `specs/codemap-mcp.md`
+- [ ] **Second-language indexer** — same schema, contract-tested
 
 ---
 
