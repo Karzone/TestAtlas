@@ -1,15 +1,28 @@
 <h1 align="center">🗺️ TestAtlas</h1>
 
 <p align="center">
-  <strong>A queryable, semantic map of your .NET test-automation solution — in one SQLite file.</strong><br>
-  Zero config. No AI. No network. Deterministic output.
+  <strong>A queryable, semantic map of your .NET test-automation solution — in one SQLite file.</strong>
+</p>
+
+<p align="center">
+  <em>Zero config&nbsp; ·&nbsp; No AI&nbsp; ·&nbsp; No network&nbsp; ·&nbsp; Deterministic</em>
 </p>
 
 <p align="center">
   <img alt="status" src="https://img.shields.io/badge/status-v0.1%20draft-orange">
   <img alt="dotnet" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
-  <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
   <img alt="output" src="https://img.shields.io/badge/output-SQLite-003B57?logo=sqlite&logoColor=white">
+  <img alt="mcp" src="https://img.shields.io/badge/MCP-ready-7C3AED">
+  <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
+</p>
+
+<p align="center">
+  <a href="#-quick-start">Quick start</a> ·
+  <a href="#-commands">Commands</a> ·
+  <a href="#-use-it-from-an-ai-agent-mcp">MCP</a> ·
+  <a href="#-see-it-on-a-real-sample">Sample</a> ·
+  <a href="#-keeping-the-map-fresh">Keeping fresh</a> ·
+  <a href="#-roadmap">Roadmap</a>
 </p>
 
 ---
@@ -17,19 +30,30 @@
 ## What it does
 
 TestAtlas statically analyses a .NET test-automation solution and emits a **semantic map** —
-`codemap.db`, a single SQLite file — describing:
+`codemap.db`, a single SQLite file — that captures:
 
 - **Projects** and their dependency edges
 - **Gherkin** features, scenarios, and steps
-- **Step definitions** and their bindings to steps (bound / unbound / ambiguous)
+- **Step definitions** and their bindings (bound / unbound / ambiguous)
 - **Page objects, API clients, helpers, and test classes**
 - The **call and usage edges** that connect them all
 
-From that map you get counts, full-text search, blast-radius ("what breaks if I change this?"),
-and self-contained HTML views — all offline and reproducible.
+…and turns that map into precise answers:
 
-> **Naming note:** the indexer spec uses **"CodeMap"** as the working name for the tool/CLI
-> (`testatlas` verb, `codemap.db` output). The repository and product are **TestAtlas**.
+| | Capability | What you get |
+|:--:|---|---|
+| 🔍 | **Search** | FTS5 over step definitions + scenarios — *"does a step for this already exist?"* |
+| 💥 | **Impact** | Blast radius — the scenarios affected by changing a class, method, step, or endpoint |
+| 📊 | **Report** | A self-contained HTML drill-down of the whole map |
+| 🕸️ | **Map** | A self-contained project-dependency graph (HTML) |
+| 🤖 | **MCP** | Serve the map to an AI agent over stdio — no context stuffing |
+| 📈 | **Stats** | Entity counts, class-kind breakdown, binding coverage, diagnostics |
+
+All of it **offline, deterministic, and reproducible** — same input, same map, every time.
+
+> [!NOTE]
+> The indexer spec uses **"CodeMap"** as the working name for the tool/CLI (`testatlas` verb,
+> `codemap.db` output). The repository and product are **TestAtlas**.
 
 ---
 
@@ -44,20 +68,14 @@ answer those questions — deterministically, without a model or a network call.
 
 ---
 
-## Requirements
+## 🚀 Quick start
 
-- [.NET SDK 8.0+](https://dotnet.microsoft.com/download)
-
----
-
-## Quick start
+> **Requires** [.NET SDK 8.0+](https://dotnet.microsoft.com/download)
 
 ```bash
-# Clone
+# Clone & build
 git clone https://github.com/Karzone/TestAtlas.git
 cd TestAtlas
-
-# Build
 dotnet build TestAtlas.sln
 
 # Index a solution → produces ./codemap.db
@@ -70,7 +88,7 @@ dotnet run --project src/CodeMap.Cli -- report        # writes codemap.html
 ```
 
 Run `index` with no path and TestAtlas auto-discovers a single `.sln`/`.csproj` in the current
-directory. The map is written atomically to `./codemap.db` by default.
+directory. The map is written atomically to `./codemap.db`.
 
 ### Install as a global tool
 
@@ -81,7 +99,7 @@ dotnet pack src/CodeMap.Cli -c Release          # produces nupkg/TestAtlas.Cli.<
 dotnet tool install --global --add-source ./nupkg TestAtlas.Cli
 ```
 
-Then the workflow becomes just:
+…so the workflow becomes just:
 
 ```bash
 testatlas index path/to/YourSolution.sln
@@ -90,7 +108,7 @@ testatlas search "cancel order" --steps
 
 ---
 
-## Commands
+## 📖 Commands
 
 | Command | What it does |
 | --- | --- |
@@ -102,18 +120,24 @@ testatlas search "cancel order" --steps
 | `map [<db>]` | Write a self-contained project dependency graph (HTML). |
 | `validate [<db>]` | Check a file is a supported TestAtlas map. |
 
-**`index` options:** `--output <file>` · `--config <file>` · `--include <glob>` (repeatable) ·
-`--exclude <glob>` (repeatable) · `--verbose` · `--quiet`
+<details>
+<summary><strong>Options &amp; exit codes</strong></summary>
 
-**`search` options:** `--steps` (step definitions only) · `--scenarios` (scenarios only)
+<br>
 
-**Exit codes:** `0` ok · `1` completed with warnings · `2` fatal · `3` bad arguments
+**`index`** &nbsp;`--output <file>` · `--config <file>` · `--include <glob>` (repeatable) · `--exclude <glob>` (repeatable) · `--verbose` · `--quiet`
+
+**`search`** &nbsp;`--steps` (step definitions only) · `--scenarios` (scenarios only)
+
+**Exit codes** &nbsp;`0` ok · `1` completed with warnings · `2` fatal · `3` bad arguments
 
 Run `testatlas --help` for the full usage text.
 
+</details>
+
 ---
 
-## Example workflow
+## 🧭 Example workflow
 
 ```bash
 # 1. Build once so any Reqnroll/SpecFlow code-gen produces *.feature.cs
@@ -134,14 +158,36 @@ testatlas report atlas.db --html atlas.html
 
 ---
 
-## See it on a real sample
+## 🤖 Use it from an AI agent (MCP)
+
+TestAtlas ships an MCP server — `testatlas-mcp` — that serves the map to any MCP-aware client
+(Claude Code, and other agents) over stdio JSON-RPC. The agent asks a precise question and gets an
+exact, structured answer straight from the `.db` — instead of stuffing source files into its
+context window.
+
+```bash
+# install the server, then register it against a map
+dotnet tool install --global TestAtlas.Mcp
+claude mcp add testatlas -- testatlas-mcp path/to/codemap.db
+```
+
+**Tools exposed:** `stats` · `impact` · `search_steps` · `search_scenarios` · `list_endpoints`
+
+> [!TIP]
+> Retrieval runs locally against the SQLite file — **deterministic, offline, and a few hundred
+> tokens per answer** instead of feeding the whole solution to the model. Protocol details in
+> [`specs/codemap-mcp.md`](specs/codemap-mcp.md).
+
+---
+
+## 🔎 See it on a real sample
 
 The repo ships a self-contained sample solution — [`samples/SampleShop`](samples/SampleShop) — a
-realistic **8-project** test-automation layout that mixes **API tests and UI tests**, so the map has
-plenty of connected nodes and exercises both API-client mapping (real `HttpClient` clients) and
-page-object mapping (real Selenium `IWebDriver` pages):
+realistic **8-project** layout that mixes **API tests and UI tests**, so the map has plenty of
+connected nodes and exercises both API-client mapping (real `HttpClient` clients) and page-object
+mapping (real Selenium `IWebDriver` pages):
 
-```
+```text
                        ┌─▶ Api.Catalog  ──┐
 Tests.Api  ────────────┼─▶ Api.Cart     ──┤
 Tests.E2E  ──┬─────────┴─▶ Api.Identity ──┼─▶ Core   (ApiClientBase : HttpClient)
@@ -149,22 +195,29 @@ Tests.E2E  ──┬─────────┴─▶ Api.Identity ──┼�
 Tests.Ui   ────▶ Ui.Pages ──────────────────▶ Core
 ```
 
-- **Core** — base types every client/page inherits (highest in-degree → biggest node)
-- **Api.Catalog / Api.Cart / Api.Identity** — `HttpClient`-based API clients
-- **Ui.Pages** — Selenium page objects (Login / Checkout / Product)
-- **Tests.Api / Tests.Ui / Tests.E2E** — Reqnroll suites whose steps drive the clients and pages
+| Project | Role |
+|---|---|
+| **Core** | base types every client/page inherits (highest in-degree → biggest node) |
+| **Api.Catalog / Api.Cart / Api.Identity** | `HttpClient`-based API clients |
+| **Ui.Pages** | Selenium page objects (Login / Checkout / Product) |
+| **Tests.Api / Tests.Ui / Tests.E2E** | Reqnroll suites whose steps drive the clients and pages |
 
-Two committed outputs, generated by the tool from that solution (open in a browser) — the map shows
-**8 projects and 11 dependencies**:
+Two committed outputs, generated by the tool from that solution — the map shows **8 projects and
+11 dependencies**:
 
-- 📊 **[Sample report](https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-report.html)** — features, scenarios, step bindings, class kinds, API endpoints
-- 🕸️ **[Sample dependency map](https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-map.html)** — the eight projects and the edges between them
+&nbsp;&nbsp;📊 **[Sample report](https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-report.html)** — features, scenarios, step bindings, class kinds, API endpoints
+<br>
+&nbsp;&nbsp;🕸️ **[Sample dependency map](https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-map.html)** — the eight projects and the edges between them
 
+> [!TIP]
 > GitHub serves `.html` as raw source, so the links above route through `htmlpreview.github.io`.
-> You can also just download [`docs/sample-report.html`](docs/sample-report.html) /
+> You can also download [`docs/sample-report.html`](docs/sample-report.html) /
 > [`docs/sample-map.html`](docs/sample-map.html) and open them locally.
 
-Reproduce them yourself:
+<details>
+<summary>Reproduce them yourself</summary>
+
+<br>
 
 ```bash
 dotnet build samples/SampleShop/SampleShop.sln
@@ -173,9 +226,11 @@ testatlas report sampleshop.db --html docs/sample-report.html
 testatlas map    sampleshop.db --html docs/sample-map.html
 ```
 
+</details>
+
 ---
 
-## Keeping the map fresh
+## 🔄 Keeping the map fresh
 
 TestAtlas answers are deterministic — but only as fresh as the map. Re-index whenever source
 changes so a query never returns a *deterministically stale* answer.
@@ -188,9 +243,15 @@ python scripts/check-map-age.py [path/to/map.db]   # defaults to ./codemap.db, t
 
 It reads the map's `generated_utc` + `solution_path`, then scans **authored** source
 (`*.cs` / `*.feature`) for anything modified since — ignoring generated files
-(`*.feature.cs`, `*.g.cs`, `*.designer.cs`), `bin`/`obj`, and any nested solution. Exit codes:
-`0` fresh · `1` stale · `2` no map — so it drops straight into a hook or CI gate.
-(Python 3, stdlib only; runs on Windows, macOS, Linux.)
+(`*.feature.cs`, `*.g.cs`, `*.designer.cs`), `bin`/`obj`, and any nested solution.
+
+| Exit code | Meaning |
+|:--:|---|
+| `0` | **fresh** — no source changes since the map was built |
+| `1` | **stale** — re-run `testatlas index` |
+| `2` | **no map** — nothing to check |
+
+*(Python 3, stdlib only — runs on Windows, macOS, Linux.)*
 
 ### Warn automatically after every pull (git hook)
 
@@ -201,30 +262,31 @@ prints, never blocks:
 git config core.hooksPath scripts/hooks     # enable once, per clone
 ```
 
-The hook auto-detects `codemap.db` / `atlas.db` at the repo root, or point it explicitly:
-
-```bash
-export TESTATLAS_DB=/path/to/your/map.db
-```
+The hook auto-detects `codemap.db` / `atlas.db` at the repo root, or point it explicitly with
+`export TESTATLAS_DB=/path/to/your/map.db`.
 
 ### How often to re-index
 
-A full re-index is a single static pass — **seconds**, and its cost scales with **solution size,
+A full re-index is a single static pass — **seconds** — and its cost scales with **solution size,
 not with how much changed**. So re-index on *change*, not on a timer:
 
 - **Locally** — the hook tells you when your map drifted; run `testatlas index` when it does.
-- **In CI** — re-index on every merge to your main branch and publish the map as a build
-  artifact (don't commit the binary `.db`).
+- **In CI** — re-index on every merge to your main branch and publish the map as a build artifact
+  (don't commit the binary `.db`).
 
-High churn (many tests added daily) is not a performance problem: each pass is a fixed cost, so
-just re-index more often. If a pass ever gets slow on a very large solution, scope it with
-`--include` / `--exclude`.
+> [!IMPORTANT]
+> High churn (many tests added daily) is **not** a performance problem — each pass is a fixed cost,
+> so just re-index more often. If a pass ever gets slow on a very large solution, scope it with
+> `--include` / `--exclude`.
 
 ### Re-index in CI (any provider)
 
-Three steps: install the tool → run `testatlas index` → publish the `.db` artifact.
+Three steps: **install the tool → run `testatlas index` → publish the `.db` artifact.**
 
-**GitHub Actions** — `.github/workflows/testatlas.yml`:
+<details>
+<summary><strong>GitHub Actions</strong> — <code>.github/workflows/testatlas.yml</code></summary>
+
+<br>
 
 ```yaml
 name: TestAtlas map
@@ -247,7 +309,12 @@ jobs:
           path: codemap.db
 ```
 
-**Azure DevOps** — `azure-pipelines.yml`:
+</details>
+
+<details>
+<summary><strong>Azure DevOps</strong> — <code>azure-pipelines.yml</code></summary>
+
+<br>
 
 ```yaml
 trigger:
@@ -268,24 +335,27 @@ steps:
     artifact: testatlas-map
 ```
 
+</details>
+
 Any other CI (GitLab CI, Jenkins, TeamCity, CircleCI) follows the same three steps.
 
 ---
 
-## Project layout
+## 📁 Project layout
 
-```
+```text
 TestAtlas/
 ├─ src/
 │  ├─ CodeMap.Core/     # analysis engine, model, SQLite storage, HTML builders
-│  └─ CodeMap.Cli/      # thin CLI wrapper — packs as the `testatlas` dotnet tool
+│  ├─ CodeMap.Cli/      # thin CLI wrapper — packs as the `testatlas` dotnet tool
+│  └─ CodeMap.Mcp/      # MCP server — packs as `testatlas-mcp`
 ├─ tests/
 │  ├─ CodeMap.Tests/    # unit / integration tests
 │  └─ fixtures/         # synthetic Reqnroll / SpecFlow / broken-solution shims
 ├─ samples/             # real projects to point the tool at (SampleShop, ReqnrollLoginDemo)
 ├─ docs/                # committed sample report + dependency map (HTML)
 ├─ scripts/             # check-map-age.py + git hooks (map freshness / staleness)
-├─ specs/               # codemap-indexer.md — the full specification
+├─ specs/               # codemap-indexer.md, codemap-mcp.md — the full specifications
 └─ TestAtlas.sln
 ```
 
@@ -295,7 +365,7 @@ targets, and acceptance criteria.
 
 ---
 
-## Design tenets
+## 🎯 Design tenets
 
 - **Zero config** — a useful map on an unseen solution, no config file required.
 - **Solution agnostic** — heuristic, overridable detection; no company-specific assumptions.
@@ -306,15 +376,15 @@ targets, and acceptance criteria.
 
 ---
 
-## Roadmap
+## 🗺️ Roadmap
 
-- [x] **Indexer CLI** — C# indexer + documented, versioned SQLite schema *(this repo, v0.1)*
-- [x] **HTML visualization** — self-contained report + project map generated from the db (`report` / `map`)
-- [x] **MCP server** — `testatlas-mcp` exposes the map to AI agents over stdio JSON-RPC (reads the same db); see `specs/codemap-mcp.md`
+- [x] **Indexer CLI** — C# indexer + documented, versioned SQLite schema *(v0.1)*
+- [x] **HTML visualization** — self-contained report + project map generated from the db
+- [x] **MCP server** — `testatlas-mcp` exposes the map to AI agents over stdio JSON-RPC
 - [ ] **Second-language indexer** — same schema, contract-tested
 
 ---
 
-## License
+## 📄 License
 
 [MIT](LICENSE) © 2026 Karthik Kalaiyarasu
