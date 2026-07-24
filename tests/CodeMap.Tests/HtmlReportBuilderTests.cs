@@ -263,6 +263,25 @@ public sealed class HtmlReportBuilderTests
         Assert.Contains("scenario across", epPanel); // the detail header ("1 scenario across 1 feature")
     }
 
+    [Fact]
+    public void Scenario_in_the_features_panel_shows_the_endpoints_it_exercises()
+    {
+        var html = HtmlReportBuilder.Build(DocWithEndpoints());
+
+        // The forward view: the "Place order" scenario's step calls both endpoints, so its Features-panel
+        // row lists them. Scope to the Features panel (both routes also appear in the endpoints panel).
+        var features = Between(html, "<h2>Features</h2>", "</main>");
+        Assert.Contains("class=\"s-apis\"", features);
+        Assert.Contains("exercises 2 endpoints", features);   // the forward count (vacuity: not 0/absent)
+        Assert.Contains("/api/orders", features);             // the URL route it hits
+        Assert.Contains("GetSupplierRequest", features);      // the operation it hits
+
+        // Symmetry: an endpoint lists the scenario iff the scenario lists the endpoint. GetSupplierRequest's
+        // detail row (endpoints panel) names "Place order", and here "Place order" names GetSupplierRequest.
+        var endpoints = Between(html, "<h2>API endpoints</h2>", "<h2>Features</h2>");
+        Assert.Contains("Place order", endpoints);
+    }
+
     /// <summary>The substring between two markers — scopes an assertion to one panel of the report.</summary>
     private static string Between(string html, string start, string end)
     {

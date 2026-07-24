@@ -294,7 +294,10 @@ file and emits one self-contained HTML document — inline CSS/JS only, no exter
 script, font, or network request, so it opens offline straight from disk. Sections: summary
 counts, step-binding **coverage** (bound / ambiguous / unbound), class-kind breakdown,
 per-project table, a feature → scenario → step drill-down where each step is tagged with its
-resolved step definition (or the honest "no matching step definition" for `unbound`), and a
+resolved step definition (or the honest "no matching step definition" for `unbound`) and each
+scenario carries a **forward view** — the endpoints it exercises, as verb-badged chips (the inverse
+of the endpoints panel's blast radius: a scenario lists an endpoint iff that endpoint lists the
+scenario, since both read the one `EndpointReachAll` pass), and a
 diagnostics table, a **collaborators** panel (page objects / API clients ranked by how many
 distinct methods drive them via `uses_type`, with the base class from `inherits` and an **unused**
 flag on orphans nothing drives), and an **API endpoints** panel (routes + operations the suite calls,

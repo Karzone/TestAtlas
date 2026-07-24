@@ -149,8 +149,16 @@ public static class HtmlReportBuilder
         // ---- collaborators (page objects / API clients + who drives them) -------------------
         AppendCollaborators(sb, doc);
 
+        // Endpoint reach, computed once and read both ways: the endpoints panel shows it forward (each
+        // endpoint → the scenarios it reaches), the Features panel shows it backward (each scenario →
+        // the endpoints it exercises). Same relation, inverted — so the two panels can never disagree.
+        var endpointReach = doc.Endpoints.Count > 0
+            ? ImpactAnalyzer.EndpointReachAll(doc)
+            : (IReadOnlyDictionary<int, ImpactAnalyzer.EndpointReach>)new Dictionary<int, ImpactAnalyzer.EndpointReach>();
+        var endpointsByScenario = InvertReachToScenarios(doc, endpointReach);
+
         // ---- API endpoints / operations the suite exercises + their blast radius -------------
-        AppendEndpoints(sb, doc);
+        AppendEndpoints(sb, doc, endpointReach);
 
         // ---- feature / scenario / step drill-down -------------------------------------------
         if (doc.Features.Count > 0)
@@ -203,7 +211,14 @@ public static class HtmlReportBuilder
                     sb.Append("<span class=\"s-name\">").Append(E(scenario.Name)).Append("</span>");
                     if (!string.IsNullOrEmpty(scenario.Tags))
                         sb.Append("<span class=\"tags\">").Append(E(scenario.Tags!)).Append("</span>");
-                    sb.Append("</div><ul class=\"steps\">");
+                    sb.Append("</div>");
+
+                    // Forward view: the endpoints this scenario exercises (the inverse of the endpoints
+                    // panel's blast radius). Filterable — the routes live inside the scenario's text.
+                    if (endpointsByScenario.TryGetValue(scenario.Id, out var apis) && apis.Count > 0)
+                        AppendScenarioApis(sb, apis);
+
+                    sb.Append("<ul class=\"steps\">");
 
                     foreach (var step in steps)
                     {
@@ -367,11 +382,11 @@ public static class HtmlReportBuilder
     /// /api/orders</c>) and <b>operations</b> (a typed request the framework maps to a URL internally,
     /// e.g. <c>GetUserconfigurationRequest</c>); the verb of an operation is inferred from its name.
     /// </summary>
-    private static void AppendEndpoints(StringBuilder sb, MapDocument doc)
+    private static void AppendEndpoints(StringBuilder sb, MapDocument doc,
+        IReadOnlyDictionary<int, ImpactAnalyzer.EndpointReach> reach)
     {
         if (doc.Endpoints.Count == 0) return;
 
-        var reach = ImpactAnalyzer.EndpointReachAll(doc);
         var routes = doc.Endpoints.Count(e => !IsOperation(e.Route));
         var operations = doc.Endpoints.Count - routes;
 
@@ -464,6 +479,50 @@ public static class HtmlReportBuilder
             sb.Append("</ul>");
         }
         sb.Append("</td></tr>");
+    }
+
+    // A scenario's own line can host only so many badges before it competes with its steps; the rest
+    // collapse into a "+N more" (the full set is one click away in the endpoints panel).
+    private const int MaxScenarioApis = 10;
+
+    /// <summary>
+    /// Invert the per-endpoint blast radius into a per-scenario forward view: scenario id → the endpoints
+    /// it exercises, deduped and ordered by route then verb. Reuses <see cref="ImpactAnalyzer.EndpointReachAll"/>
+    /// verbatim, so a scenario lists an endpoint <b>iff</b> that endpoint's panel row lists the scenario.
+    /// </summary>
+    private static IReadOnlyDictionary<int, List<EndpointRow>> InvertReachToScenarios(
+        MapDocument doc, IReadOnlyDictionary<int, ImpactAnalyzer.EndpointReach> reach)
+    {
+        var byScenario = new Dictionary<int, List<EndpointRow>>();
+        if (reach.Count == 0) return byScenario;
+
+        var epById = doc.Endpoints.ToDictionary(e => e.Id);
+        foreach (var (epId, r) in reach)
+        {
+            if (!epById.TryGetValue(epId, out var ep)) continue;
+            foreach (var sid in r.ScenarioIds)
+                (byScenario.TryGetValue(sid, out var l) ? l : (byScenario[sid] = new())).Add(ep);
+        }
+        foreach (var list in byScenario.Values)
+            list.Sort((a, b) =>
+            {
+                var byRoute = string.CompareOrdinal(a.Route, b.Route);
+                return byRoute != 0 ? byRoute : string.CompareOrdinal(a.Verb, b.Verb);
+            });
+        return byScenario;
+    }
+
+    /// <summary>The endpoints a scenario exercises, as compact verb-badged chips beneath its name.</summary>
+    private static void AppendScenarioApis(StringBuilder sb, List<EndpointRow> apis)
+    {
+        sb.Append("<div class=\"s-apis\"><span class=\"s-apis-lead\">exercises ").Append(apis.Count)
+          .Append(" endpoint").Append(apis.Count == 1 ? "" : "s").Append("</span>");
+        foreach (var ep in apis.Take(MaxScenarioApis))
+            sb.Append("<span class=\"s-api\"><span class=\"verb ").Append(VerbClass(ep.Verb)).Append("\">")
+              .Append(E(ep.Verb)).Append("</span><span class=\"s-api-r\">").Append(E(ep.Route)).Append("</span></span>");
+        if (apis.Count > MaxScenarioApis)
+            sb.Append("<span class=\"s-api-more\">+").Append(apis.Count - MaxScenarioApis).Append(" more</span>");
+        sb.Append("</div>");
     }
 
     private static string VerbClass(string verb) => verb switch
@@ -613,6 +672,12 @@ public static class HtmlReportBuilder
         .scenario{padding:6px 14px 12px 20px;border-top:1px solid var(--line)}
         .s-head{display:flex;align-items:center;gap:10px;margin:10px 0 6px}
         .s-name{font-weight:600;font-size:13.5px}
+        .s-apis{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;margin:0 0 10px;padding-left:2px}
+        .s-apis-lead{font-size:11.5px;color:var(--faint);margin-right:2px}
+        .s-api{display:inline-flex;align-items:center;gap:5px}
+        .s-api .verb{font-size:9.5px;min-width:38px;padding:1px 5px}
+        .s-api-r{font-family:var(--mono);font-size:11.5px;color:var(--dim);overflow-wrap:anywhere}
+        .s-api-more{font-size:11.5px;color:var(--faint)}
         .steps{list-style:none;margin:0;padding:0}
         .step{display:flex;align-items:baseline;gap:8px;padding:5px 8px;border-radius:7px;font-size:13px;flex-wrap:wrap}
         .step+.step{margin-top:1px}
