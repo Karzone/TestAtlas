@@ -30,7 +30,12 @@
 </p>
 
 <p align="center">
-  <img src="docs/demo/testatlas-demo.gif" alt="TestAtlas mapping a solution and answering questions about it" width="820">
+  <a href="docs/demo/testatlas-demo.mp4">
+    <img src="docs/demo/demo-poster.png" alt="Watch the TestAtlas walkthrough" width="820">
+  </a>
+</p>
+<p align="center">
+  <em>▶ Full walkthrough — generate the map, explore the HTML report &amp; dependency graph, then query it like an AI agent over MCP. <a href="docs/demo/testatlas-demo.mp4">Play&nbsp;↗</a></em>
 </p>
 
 ---

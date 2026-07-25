@@ -1,14 +1,17 @@
 name: demo
 
-# Renders the terminal demo (docs/demo/demo.tape) into docs/demo/testatlas-demo.gif
-# on an Ubuntu runner and commits the result back. Runs when the tape or this
-# workflow changes, or on demand.
+# Builds the demo video docs/demo/testatlas-demo.mp4 by concatenating three
+# segments, all rendered from the real tool against samples/SampleShop:
+#   1. intro.tape  (VHS)        — generate the map in the terminal
+#   2. screencast.mjs (Playwright) — click through the HTML report + dependency map
+#   3. mcp.tape    (VHS)        — ask the map like an AI agent over MCP
+# Re-renders whenever any demo source changes, or on manual dispatch.
 on:
   workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - docs/demo/demo.tape
+      - docs/demo/**
       - .github/workflows/demo.yml
 
 permissions:
@@ -17,6 +20,10 @@ permissions:
 concurrency:
   group: demo-render
   cancel-in-progress: true
+
+env:
+  W: "1120"
+  H: "700"
 
 jobs:
   render:
@@ -29,9 +36,15 @@ jobs:
         with:
           dotnet-version: "8.0.x"
 
-      - name: Install TestAtlas CLI
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install TestAtlas (CLI + MCP)
         run: |
           dotnet tool install -g TestAtlas.Cli
+          dotnet tool install -g TestAtlas.Mcp
           echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
 
       - name: Install VHS, ttyd and ffmpeg
@@ -41,19 +54,56 @@ jobs:
           echo "deb [signed-by=/etc/apt/keyrings/charm.gpg] https://repo.charm.sh/apt/ * *" | sudo tee /etc/apt/sources.list.d/charm.list
           sudo apt-get update
           sudo apt-get install -y vhs ttyd ffmpeg
-          vhs --version && ttyd --version && ffmpeg -version | head -1
+          vhs --version && ffmpeg -version | head -1
 
-      - name: Render the demo GIF
-        run: vhs docs/demo/demo.tape
+      - name: Install Playwright + Chromium
+        run: |
+          npm install --prefix docs/demo
+          npx --prefix docs/demo playwright install --with-deps chromium
 
-      - name: Commit the rendered GIF
+      - name: Generate the map, report and dependency map
+        working-directory: samples/SampleShop
+        run: |
+          testatlas index SampleShop.sln --output atlas.db
+          testatlas report atlas.db --html report.html
+          testatlas map    atlas.db --html map.html
+
+      - name: Segment 2 — browser screencast (Playwright)
+        run: |
+          rm -rf /tmp/vid && mkdir -p /tmp/vid
+          node docs/demo/screencast.mjs \
+            samples/SampleShop/report.html samples/SampleShop/map.html /tmp/vid
+          webm=$(ls /tmp/vid/*.webm | head -1)
+          ffmpeg -y -i "$webm" -vf "scale=${W}:${H}:force_original_aspect_ratio=decrease,pad=${W}:${H}:-1:-1:color=black,setsar=1,fps=24" \
+            -c:v libx264 -crf 20 -preset slow -pix_fmt yuv420p /tmp/browser.mp4
+          # poster frame from a rich moment (map node pinned, ~24s into the browser part)
+          ffmpeg -y -ss 24 -i /tmp/browser.mp4 -frames:v 1 docs/demo/demo-poster.png
+
+      - name: Segments 1 & 3 — terminal casts (VHS)
+        run: |
+          export NODE_PATH="$PWD/docs/demo/node_modules"
+          vhs docs/demo/intro.tape
+          vhs docs/demo/mcp.tape
+
+      - name: Concatenate the three segments
+        run: |
+          norm='scale=%W:%H:force_original_aspect_ratio=decrease,pad=%W:%H:-1:-1:color=black,setsar=1,fps=24,format=yuv420p'
+          norm=${norm//%W/$W}; norm=${norm//%H/$H}
+          ffmpeg -y -i docs/demo/intro.mp4 -i /tmp/browser.mp4 -i docs/demo/mcp.mp4 \
+            -filter_complex "[0:v]${norm}[a];[1:v]${norm}[b];[2:v]${norm}[c];[a][b][c]concat=n=3:v=1:a=0[v]" \
+            -map "[v]" -c:v libx264 -crf 21 -preset slow -pix_fmt yuv420p -movflags +faststart \
+            docs/demo/testatlas-demo.mp4
+          rm -f docs/demo/intro.mp4 docs/demo/mcp.mp4
+          ls -la docs/demo/testatlas-demo.mp4 docs/demo/demo-poster.png
+
+      - name: Commit the rendered video + poster
         run: |
           git config user.name  "Karzone"
           git config user.email "karthikawaiting@gmail.com"
-          if [ -n "$(git status --porcelain docs/demo/testatlas-demo.gif)" ]; then
-            git add docs/demo/testatlas-demo.gif
-            git commit -m "chore(demo): re-render terminal demo GIF"
+          git add docs/demo/testatlas-demo.mp4 docs/demo/demo-poster.png
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(demo): re-render walkthrough video (terminal + browser + MCP)"
             git push
           else
-            echo "Demo GIF unchanged — nothing to commit."
+            echo "Demo video unchanged — nothing to commit."
           fi
