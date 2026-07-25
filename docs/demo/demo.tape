@@ -33,7 +33,7 @@ Enter
 Sleep 600ms
 Type "testatlas index SampleShop.sln --output atlas.db"
 Enter
-Sleep 10s
+Sleep 7s
 
 Type "# 2  What's in the map?"
 Enter
@@ -62,12 +62,6 @@ Sleep 500ms
 Type "testatlas report atlas.db --html atlas.html"
 Enter
 Sleep 3s
-
-# --- tidy up the generated files (hidden) ---
-Hide
-Type "rm -f atlas.db atlas.html"
-Enter
-Show
 
 Type "# One file. Queryable. Deterministic.  🗺️"
 Enter
