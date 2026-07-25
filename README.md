@@ -1,8 +1,7 @@
-<p align="center">
-  <img src="assets/logo.svg" alt="TestAtlas logo" width="180" height="180">
-</p>
-
-<h1 align="center">TestAtlas</h1>
+<h1 align="center">
+  <img src="assets/logo-mark.svg" width="40" height="40" alt="" valign="middle">
+  &nbsp;TestAtlas
+</h1>
 
 <p align="center">
   <strong>A queryable, semantic map of your .NET test-automation solution — in one SQLite file.</strong>
