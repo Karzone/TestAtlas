@@ -1,0 +1,52 @@
+name: demo
+
+# Renders the terminal demo (docs/demo/demo.tape) into docs/demo/testatlas-demo.gif
+# on an Ubuntu runner and commits the result back. Runs when the tape or this
+# workflow changes, or on demand.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - docs/demo/demo.tape
+      - .github/workflows/demo.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: demo-render
+  cancel-in-progress: true
+
+jobs:
+  render:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install TestAtlas CLI
+        run: |
+          dotnet tool install -g TestAtlas.Cli
+          echo "$HOME/.dotnet/tools" >> "$GITHUB_PATH"
+
+      - name: Render the demo GIF
+        uses: charmbracelet/vhs-action@v2
+        with:
+          path: docs/demo/demo.tape
+
+      - name: Commit the rendered GIF
+        run: |
+          git config user.name  "Karzone"
+          git config user.email "karthikawaiting@gmail.com"
+          if [ -n "$(git status --porcelain docs/demo/testatlas-demo.gif)" ]; then
+            git add docs/demo/testatlas-demo.gif
+            git commit -m "chore(demo): re-render terminal demo GIF"
+            git push
+          else
+            echo "Demo GIF unchanged — nothing to commit."
+          fi

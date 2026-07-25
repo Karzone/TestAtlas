@@ -29,6 +29,10 @@
   <a href="#-roadmap">Roadmap</a>
 </p>
 
+<p align="center">
+  <img src="docs/demo/testatlas-demo.gif" alt="TestAtlas mapping a solution and answering questions about it" width="820">
+</p>
+
 ---
 
 ## What it does
