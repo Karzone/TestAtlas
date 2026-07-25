@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="TestAtlas logo">
+  <title>TestAtlas</title>
+  <defs>
+    <radialGradient id="glass" cx="38%" cy="32%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="42%" stop-color="#dcebff"/>
+      <stop offset="100%" stop-color="#9dc0ef"/>
+    </radialGradient>
+    <linearGradient id="handle" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dfe6ef"/>
+      <stop offset="45%" stop-color="#aab6c6"/>
+      <stop offset="100%" stop-color="#6c7a8c"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#eef3fb"/>
+      <stop offset="100%" stop-color="#9fb0c6"/>
+    </linearGradient>
+  </defs>
+
+  <!-- ===== Portal: tilted disc of concentric rings ===== -->
+  <g transform="translate(262 250) rotate(-18)">
+    <!-- dark navy body / sticker outline -->
+    <ellipse cx="0" cy="0" rx="214" ry="168" fill="#0b1a38"/>
+    <!-- bright yellow rim -->
+    <ellipse cx="0" cy="0" rx="196" ry="152" fill="none" stroke="#f3de77" stroke-width="22"/>
+    <!-- deep navy field -->
+    <ellipse cx="0" cy="0" rx="178" ry="138" fill="#0d1f42"/>
+    <!-- concentric teal contour rings receding into depth -->
+    <ellipse cx="0" cy="0" rx="168" ry="130" fill="none" stroke="#5ec4b6" stroke-width="9"/>
+    <ellipse cx="0" cy="0" rx="140" ry="108" fill="none" stroke="#4fb2a6" stroke-width="8"/>
+    <ellipse cx="0" cy="0" rx="114" ry="88"  fill="none" stroke="#5ec4b6" stroke-width="7"/>
+    <ellipse cx="0" cy="0" rx="90"  ry="69"  fill="none" stroke="#4fb2a6" stroke-width="6"/>
+    <ellipse cx="0" cy="0" rx="66"  ry="50"  fill="none" stroke="#5ec4b6" stroke-width="6"/>
+    <ellipse cx="0" cy="0" rx="42"  ry="32"  fill="none" stroke="#3f9d92" stroke-width="5"/>
+    <!-- vanishing centre -->
+    <ellipse cx="0" cy="0" rx="22"  ry="16"  fill="#081428"/>
+  </g>
+
+  <!-- ===== Magnifying glass ===== -->
+  <!-- handle (drawn first so lens overlaps its top) -->
+  <g transform="rotate(45 300 300)">
+    <rect x="284" y="299" width="192" height="44" rx="22" fill="#0b1a38"/>
+    <rect x="290" y="305" width="182" height="32" rx="16" fill="url(#handle)"/>
+  </g>
+
+  <!-- lens -->
+  <g transform="translate(212 232)">
+    <circle cx="0" cy="0" r="104" fill="#0b1a38"/>            <!-- outline -->
+    <circle cx="0" cy="0" r="92"  fill="url(#rim)"/>          <!-- steel bezel -->
+    <circle cx="0" cy="0" r="78"  fill="#0b1a38"/>            <!-- inner ring -->
+    <circle cx="0" cy="0" r="70"  fill="url(#glass)"/>        <!-- glass -->
+    <!-- gloss highlights -->
+    <ellipse cx="-22" cy="-26" rx="30" ry="20" fill="#ffffff" opacity="0.85" transform="rotate(-32 -22 -26)"/>
+    <path d="M 34 -42 A 66 66 0 0 1 46 34" fill="none" stroke="#ffffff" stroke-width="7" stroke-linecap="round" opacity="0.55"/>
+  </g>
+</svg>

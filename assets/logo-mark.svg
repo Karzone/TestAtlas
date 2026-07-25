@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128" role="img" aria-label="TestAtlas mark">
+  <title>TestAtlas</title>
+  <defs>
+    <radialGradient id="g" cx="38%" cy="32%" r="75%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="45%" stop-color="#dcebff"/>
+      <stop offset="100%" stop-color="#9dc0ef"/>
+    </radialGradient>
+  </defs>
+  <!-- portal rings -->
+  <g transform="translate(70 58)">
+    <circle r="52" fill="#0b1a38"/>
+    <circle r="46" fill="none" stroke="#f3de77" stroke-width="8"/>
+    <circle r="36" fill="#0d1f42"/>
+    <circle r="32" fill="none" stroke="#5ec4b6" stroke-width="5"/>
+    <circle r="22" fill="none" stroke="#4fb2a6" stroke-width="5"/>
+    <circle r="11" fill="#081428"/>
+  </g>
+  <!-- handle -->
+  <g transform="rotate(45 74 74)">
+    <rect x="70" y="72" width="52" height="16" rx="8" fill="#0b1a38"/>
+    <rect x="73" y="75" width="46" height="10" rx="5" fill="#aab6c6"/>
+  </g>
+  <!-- lens -->
+  <g transform="translate(50 52)">
+    <circle r="34" fill="#0b1a38"/>
+    <circle r="26" fill="#0b1a38"/>
+    <circle r="23" fill="url(#g)"/>
+    <ellipse cx="-8" cy="-9" rx="9" ry="6" fill="#ffffff" opacity="0.85" transform="rotate(-32 -8 -9)"/>
+  </g>
+</svg>
