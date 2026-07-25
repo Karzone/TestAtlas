@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or discussion
+    url: https://github.com/Karzone/TestAtlas/discussions
+    about: Ask a question or share an idea before filing an issue.
+  - name: Report a security vulnerability
+    url: https://github.com/Karzone/TestAtlas/security/advisories/new
+    about: Please report vulnerabilities privately, not as a public issue.
