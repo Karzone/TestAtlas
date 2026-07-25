@@ -26,14 +26,14 @@ Type "# Point an AI agent at the same map over MCP — no human running queries.
 Enter
 Sleep 900ms
 
-Type "# \"Find a scenario about the cart\""
+Type "# 'Find a scenario about the cart'"
 Enter
 Sleep 500ms
 Type "node ../../docs/demo/mcp-ask.mjs atlas.db find cart"
 Enter
 Sleep 3800ms
 
-Type "# \"What breaks if I change the CartApiClient?\""
+Type "# 'What breaks if I change the CartApiClient?'"
 Enter
 Sleep 700ms
 Type "node ../../docs/demo/mcp-ask.mjs atlas.db impact class CartApiClient"
