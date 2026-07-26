@@ -1,4 +1,4 @@
-# CodeMap Indexer — Specification (v0.1 draft)
+# CodeMap Indexer — Specification (v0.1.1)
 
 > Component #1 of the CodeMap project: a zero-config CLI that statically analyses a .NET
 > test-automation solution and emits a queryable semantic map as a single SQLite file.

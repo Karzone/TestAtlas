@@ -12,7 +12,7 @@
 </p>
 
 <p align="center">
-  <img alt="status" src="https://img.shields.io/badge/status-v0.1%20draft-orange">
+  <img alt="status" src="https://img.shields.io/badge/status-v0.1.1%20released-brightgreen">
   <a href="https://www.nuget.org/packages/TestAtlas.Cli"><img alt="nuget" src="https://img.shields.io/nuget/v/TestAtlas.Cli?logo=nuget&label=NuGet&color=004880"></a>
   <img alt="dotnet" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
   <img alt="output" src="https://img.shields.io/badge/output-SQLite-003B57?logo=sqlite&logoColor=white">
@@ -27,15 +27,6 @@
   <a href="#-see-it-on-a-real-sample">Sample</a> ·
   <a href="#-keeping-the-map-fresh">Keeping fresh</a> ·
   <a href="#-roadmap">Roadmap</a>
-</p>
-
-<p align="center">
-  <a href="docs/demo/testatlas-demo.mp4">
-    <img src="docs/demo/demo-poster.png" alt="Watch the TestAtlas walkthrough" width="820">
-  </a>
-</p>
-<p align="center">
-  <em>▶ Full walkthrough — generate the map, explore the HTML report &amp; dependency graph, then query it like an AI agent over MCP. <a href="docs/demo/testatlas-demo.mp4">Play&nbsp;↗</a></em>
 </p>
 
 ---

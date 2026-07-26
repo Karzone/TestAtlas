@@ -1,9 +1,0 @@
-{
-  "name": "testatlas-demo",
-  "private": true,
-  "type": "module",
-  "description": "Scripts that render the TestAtlas demo video (browser screencast + MCP client).",
-  "dependencies": {
-    "playwright": "1.62.0"
-  }
-}
