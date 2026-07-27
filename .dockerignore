@@ -1,0 +1,15 @@
+# Keep the Docker build context lean — the image only needs samples/SampleShop.
+.git
+.github
+docs
+assets
+specs
+scripts
+tests
+**/bin
+**/obj
+*.db
+*.db3
+*.sqlite
+*.7z
+*.html
