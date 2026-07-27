@@ -157,6 +157,9 @@ testatlas impact atlas.db --class ProductsApiClient
 
 # 5. Share a human-readable snapshot
 testatlas report atlas.db --html atlas.html
+
+# 6. See how the projects depend on each other
+testatlas map atlas.db --html atlas-map.html
 ```
 
 > [!NOTE]
