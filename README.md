@@ -92,6 +92,7 @@ testatlas index path/to/YourSolution.sln
 testatlas stats
 testatlas search "login"
 testatlas report        # writes codemap.html
+testatlas map           # writes codemap-map.html
 ```
 
 Run `index` with no path and TestAtlas auto-discovers a single `.sln`/`.csproj` in the current
