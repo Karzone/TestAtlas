@@ -52,10 +52,13 @@ dotnet tool install --global TestAtlas.Mcp     # the MCP server  (and TestAtlas.
 Point your agent at it via `.mcp.json` — **Visual Studio**, **VS Code / Copilot**, or **Claude Code**:
 
 ```json
-{ "servers": { "testatlas": { "type": "stdio", "command": "testatlas-mcp" } } }
+{ "servers": { "testatlas": { "type": "stdio", "command": "testatlas-mcp", "args": ["C:\\path\\to\\codemap.db"] } } }
 ```
 
-Run `testatlas index <your-solution>` first so there's a `codemap.db` to serve. Full setup — agent
+Run `testatlas index <your-solution>` first to produce the `codemap.db`, then point the config at it.
+**Pass the map path explicitly** (as above, or via a `TESTATLAS_DB` env var) — most agents launch the
+server from their own working directory, not your solution folder, so relying on auto-discovery of a
+`codemap.db` in the current directory makes the server exit with `code 2`. Full setup — agent
 registration, map auto-discovery, and running from source — is in
 **[Use it from an AI agent](#-use-it-from-an-ai-agent-mcp)**.
 
@@ -250,8 +253,10 @@ exact, structured answer straight from the `.db` — instead of stuffing source 
 context window.
 
 It's published on NuGet as an **MCP-server package** (`TestAtlas.Mcp`), so MCP-aware editors can
-discover and launch it. The map path is **optional** — the server auto-discovers a `codemap.db`
-(or `atlas.db`) in the working directory, or reads the `TESTATLAS_DB` environment variable.
+discover and launch it. The server resolves the map in this order: a **path argument**, the
+`TESTATLAS_DB` environment variable, or a `codemap.db`/`atlas.db` in the current working directory.
+**Pass the path explicitly** — most agents launch the server from their own working directory, not
+your solution folder, so auto-discovery usually finds nothing and the server exits with `code 2`.
 
 **Visual Studio / VS Code** (GitHub Copilot agent mode) — add to your `.mcp.json` (`%USERPROFILE%\.mcp.json`
 or `<SolutionDir>\.mcp.json`):
@@ -262,22 +267,23 @@ or `<SolutionDir>\.mcp.json`):
     "testatlas": {
       "type": "stdio",
       "command": "dnx",
-      "args": ["TestAtlas.Mcp", "--yes"]
+      "args": ["TestAtlas.Mcp", "--yes", "C:\\path\\to\\codemap.db"]
     }
   }
 }
 ```
 
-`dnx` (from the .NET 10 SDK) fetches and runs the server on demand — no pre-install. Launch it from a
-folder that holds your `codemap.db` and it's picked up automatically; otherwise append the path as a
-final arg. In Visual Studio you can also use **Tools picker → `+` → Add custom MCP server** to write
-this entry for you.
+`dnx` (from the .NET 10 SDK) fetches and runs the server on demand — no pre-install. Keep the map
+path as the final arg (double-backslash it on Windows). You *can* drop the path if the agent launches
+the server from the folder holding your `codemap.db`, but most don't — so passing it explicitly is the
+reliable form. In Visual Studio you can also use **Tools picker → `+` → Add custom MCP server** to
+write this entry for you.
 
 > [!NOTE]
 > `dnx` ships with the **.NET 10 SDK**. If you're on **.NET 8/9** (no `dnx` command), install the
 > tool instead — `dotnet tool install --global TestAtlas.Mcp` — and change the config above to
-> `"command": "testatlas-mcp"` with no `args`. (This is also what NuGet's auto-generated snippet
-> uses `dnx` for, so swap it the same way there.)
+> `"command": "testatlas-mcp", "args": ["C:\\path\\to\\codemap.db"]`. (This is also what NuGet's
+> auto-generated snippet uses `dnx` for, so swap it the same way there.)
 
 **Claude Code** — install the global tool and register it:
 
