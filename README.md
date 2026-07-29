@@ -1,3 +1,4 @@
+<!-- mcp-name: io.github.Karzone/TestAtlas.Mcp -->
 <h1 align="center">
   <img src="assets/logo-mark.svg" width="40" height="40" alt="" valign="middle">
   &nbsp;TestAtlas

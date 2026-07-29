@@ -40,3 +40,28 @@ jobs:
           --api-key ${{ steps.login.outputs.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
+
+      # --- List the server in the Official MCP Registry so it shows in Visual Studio's
+      #     MCP Server Manager and other registry-aware clients. GitHub OIDC — no secret. ---
+      - name: Wait for the package to be available on NuGet
+        shell: pwsh
+        run: |
+          $version = ([regex]::Match((Get-Content src/Directory.Build.props -Raw), '<Version>(.*?)</Version>').Groups[1].Value).ToLowerInvariant()
+          $url = "https://api.nuget.org/v3-flatcontainer/testatlas.mcp/$version/readme"
+          $elapsed = 0; $interval = 10; $timeout = 300
+          Write-Host "Waiting for TestAtlas.Mcp $version on NuGet ($url) ..."
+          while ($true) {
+            if ($elapsed -gt $timeout) { Write-Error "Package README not available after $elapsed s."; exit 1 }
+            try { Invoke-WebRequest -Uri $url -ErrorAction Stop | Out-Null; Write-Host "Available."; break }
+            catch { Write-Host "Not yet available ($elapsed s)..."; Start-Sleep -Seconds $interval; $elapsed += $interval }
+          }
+
+      - name: Download mcp-publisher
+        run: curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_linux_amd64.tar.gz" | tar xz
+
+      - name: Publish to the MCP Registry
+        run: |
+          version=$(grep -oP '(?<=<Version>)[^<]+' src/Directory.Build.props)
+          sed "s/0\.0\.0-dev/${version}/g" src/CodeMap.Mcp/.mcp/server.json > server.publish.json
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish server.publish.json
