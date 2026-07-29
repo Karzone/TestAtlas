@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TestAtlas.Core.Storage;
 using TestAtlas.Mcp;
 using Xunit;
 
@@ -214,6 +215,29 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
         var ph = step.GetProperty("placeholders").EnumerateArray().First();
         Assert.Equal("typed", ph.GetProperty("kind").GetString());
         Assert.Equal("int", ph.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void Step_catalog_extracts_regex_alternation_as_enum_values()
+    {
+        // Headline feature: a regex alternation surfaces as an enum of its allowed values. Driven
+        // through an injected map (the fixture has no alternation step) so it stays a durable check.
+        var doc = new MapDocument
+        {
+            StepDefinitions = new[]
+            {
+                new StepDefinitionRow(1, 1, 1, 1, "When",
+                    "the user posts a damage with feed '(Auto|Allianz|AllianzVoe)'", "regex", null, "GpmSteps.cs", 10),
+            },
+        };
+        var server = new McpServer("unused.db", doc);
+        var res = JsonDocument.Parse(server.HandleLine(
+            """{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"step_catalog","arguments":{}}}""")!).RootElement;
+        var payload = JsonDocument.Parse(res.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString()!).RootElement;
+        var enumPh = payload.GetProperty("steps")[0].GetProperty("placeholders").EnumerateArray()
+            .Single(p => p.GetProperty("kind").GetString() == "enum");
+        var values = enumPh.GetProperty("values").EnumerateArray().Select(v => v.GetString()).ToList();
+        Assert.Equal(new[] { "Auto", "Allianz", "AllianzVoe" }, values);
     }
 
     [Fact]

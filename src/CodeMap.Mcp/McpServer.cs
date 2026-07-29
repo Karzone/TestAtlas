@@ -563,8 +563,12 @@ public sealed class McpServer
 
         return Serialize(new
         {
+            // Denominators so a clean zero is unambiguous: "0 of 0" means the map indexed no endpoints
+            // (e.g. a pre-v4 map), NOT that everything is covered — distinct from "0 of 50".
+            totalEndpoints = _doc.Endpoints.Count,
             untestedEndpointCount = untested.Count,
             untestedEndpoints = untested.Take(limit).Select(e => new { verb = e.Verb, route = e.Path ?? e.Route }),
+            totalStepDefinitions = _doc.StepDefinitions.Count,
             unusedStepDefinitionCount = unused.Count,
             unusedStepDefinitions = unused.Take(limit).Select(s => new
             {
