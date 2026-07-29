@@ -325,6 +325,29 @@ claude mcp add testatlas -- src/CodeMap.Mcp/bin/Release/net8.0/TestAtlas.Mcp.exe
 > tokens per answer** instead of feeding the whole solution to the model. Protocol details in
 > [`specs/codemap-mcp.md`](specs/codemap-mcp.md).
 
+### Verify it's working
+
+Don't ask the agent *"are you using testatlas?"* — models don't reliably introspect their own tool
+calls, and a confident "no" (or a suggestion to "create an index" — that's the editor's own workspace
+index, unrelated to TestAtlas) proves nothing. Check these signals instead:
+
+1. **Is the server connected?** Open the **tools/wrench menu** in the chat input — `testatlas` and its
+   tools (`stats`, `impact`, `search_steps`, `search_scenarios`, `list_endpoints`) should be listed and
+   enabled. If they're missing, the server didn't start — see [Troubleshooting](#-troubleshooting).
+2. **Force a call with a ground-truth question** (in your agent's **Agent** mode, not a plain chat/ask
+   mode — only agent mode invokes tools):
+   > `Using #testatlas, call the stats tool — how many classes and methods does <a project in your map> have?`
+
+   A correct, specific count the model couldn't have guessed = it queried your map. A vague answer = it
+   didn't.
+3. **Watch for the tool call itself** — the agent renders a tool-invocation card (e.g. `testatlas › stats`)
+   you can expand to see the exact arguments and raw result.
+
+> [!NOTE]
+> The first call usually pops a **client consent prompt** ("This tool is from 'testatlas'…"). That's the
+> editor's standard MCP safety gate — it fires for *every* MCP server, not just this one. TestAtlas is
+> local and read-only, so it's safe to **Allow** / **Always allow**.
+
 ---
 
 ## 🔎 See it on a real sample
