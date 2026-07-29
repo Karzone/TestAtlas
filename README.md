@@ -112,6 +112,44 @@ dotnet run --project src/CodeMap.Cli -- index path/to/YourSolution.sln
 
 ---
 
+## 🛠️ Troubleshooting
+
+<details>
+<summary><b><code>dotnet tool install</code> fails with <code>401 Unauthorized</code> on a corporate machine</b></summary>
+
+<br>
+
+If your machine has a private, authenticated NuGet feed configured (e.g. Azure DevOps Artifacts),
+`dotnet` queries **every** registered source during install and fails with **401** on the private
+one — even though TestAtlas is published on public nuget.org.
+
+Install using only nuget.org. Create a minimal `public.config`:
+
+```xml
+<?xml version="1.0" encoding="utf-8"?>
+<configuration>
+  <packageSources>
+    <clear />
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+  </packageSources>
+</configuration>
+```
+
+…then point the install at it:
+
+```bash
+dotnet tool install --global TestAtlas.Cli --configfile ./public.config
+dotnet tool install --global TestAtlas.Mcp --configfile ./public.config
+```
+
+The `<clear />` drops every inherited source (including the private feed), so `dotnet` only sees
+nuget.org. It's a one-off override — it doesn't change your machine's NuGet configuration or affect
+the private feed for your other projects.
+
+</details>
+
+---
+
 ## 📖 Commands
 
 | Command | What it does |
