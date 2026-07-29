@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TestAtlas.Core.Analysis;
 using TestAtlas.Core.Binding;
 using TestAtlas.Core.Model;
@@ -189,6 +190,43 @@ public sealed class McpServer
             "carrying it, most-used first. Use to tag new scenarios consistently with what already exists.",
             new { type = "object", properties = new { limit = new { type = "integer", description = "Max tags (default 200)." } } },
             ListTags),
+
+        new("step_catalog",
+            "The reusable step vocabulary: step definitions with their placeholders and (best-effort) allowed values pulled from the " +
+            "expression — cucumber {int}/{string}/{word}, regex alternations like (Auto|Allianz) as enum values, other groups as free " +
+            "parameters. Use to compose new scenarios from steps and values that already exist. Optional keyword/query filters.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    keyword = new { type = "string", @enum = new[] { "given", "when", "then", "stepdefinition" }, description = "Optional: only steps declared with this attribute keyword." },
+                    query = new { type = "string", description = "Optional: only steps whose expression contains this text." },
+                    limit = new { type = "integer", description = "Max steps (default 100)." },
+                },
+            },
+            StepCatalog),
+
+        new("coverage_gaps",
+            "Where the suite has holes: HTTP endpoints with zero scenario reach (untested), and step definitions that no scenario binds " +
+            "(dead glue). Use to decide what to automate next, or to prune. Counts are exact; lists are capped by 'limit'.",
+            new { type = "object", properties = new { limit = new { type = "integer", description = "Max rows per category (default 50)." } } },
+            CoverageGaps),
+
+        new("project_dependencies",
+            "The project dependency graph the suite implies: for each project, which projects it depends on and which depend on it, " +
+            "derived from cross-project binds_to/uses_type/inherits edges (edge counts as weight). Answers e.g. \"what depends on the " +
+            "Party project?\". Optional 'project' name filter.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    project = new { type = "string", description = "Optional: substring of a project name to focus on (case-insensitive)." },
+                    limit = new { type = "integer", description = "Max projects (default 200)." },
+                },
+            },
+            ProjectDependencies),
     };
 
     private string Stats()
@@ -482,6 +520,141 @@ public sealed class McpServer
         var rows = counts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)
             .Take(limit).Select(kv => new { tag = kv.Key, scenarios = kv.Value });
         return Serialize(new { total = counts.Count, tags = rows });
+    }
+
+    private string StepCatalog(JsonElement args)
+    {
+        var limit = LimitArg(args, 100);
+        var keyword = Arg(args, "keyword");
+        var query = Arg(args, "query");
+
+        var q = _doc.StepDefinitions.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(keyword))
+            q = q.Where(s => string.Equals(s.Keyword, keyword, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(query))
+            q = q.Where(s => s.Expression.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+        var all = q.ToList();
+        var rows = all.Take(limit).Select(s => new
+        {
+            expression = s.Expression,
+            keyword = s.Keyword,
+            expressionKind = s.ExpressionKind,
+            methodParameters = s.Parameters,
+            placeholders = ExtractPlaceholders(s.Expression, s.ExpressionKind),
+            @class = _doc.Classes.FirstOrDefault(c => c.Id == s.ClassId)?.Name,
+            location = $"{s.FilePath}:{s.LineStart}",
+        });
+        return Serialize(new { total = all.Count, count = Math.Min(all.Count, limit), steps = rows });
+    }
+
+    private string CoverageGaps(JsonElement args)
+    {
+        var limit = LimitArg(args, 50);
+
+        var reach = ImpactAnalyzer.EndpointReachAll(_doc);
+        bool Untested(EndpointRow e) => !(reach.TryGetValue(e.Id, out var r) && r.ScenarioIds.Count > 0);
+        var untested = _doc.Endpoints.Where(Untested).OrderBy(e => e.Route, StringComparer.Ordinal).ToList();
+
+        var boundDefIds = _doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.BindsTo && e.ToKind == RefKinds.StepDefinition && e.ToId is not null)
+            .Select(e => e.ToId!.Value).ToHashSet();
+        var unused = _doc.StepDefinitions.Where(s => !boundDefIds.Contains(s.Id)).ToList();
+
+        return Serialize(new
+        {
+            untestedEndpointCount = untested.Count,
+            untestedEndpoints = untested.Take(limit).Select(e => new { verb = e.Verb, route = e.Path ?? e.Route }),
+            unusedStepDefinitionCount = unused.Count,
+            unusedStepDefinitions = unused.Take(limit).Select(s => new
+            {
+                expression = s.Expression,
+                keyword = s.Keyword,
+                @class = _doc.Classes.FirstOrDefault(c => c.Id == s.ClassId)?.Name,
+                location = $"{s.FilePath}:{s.LineStart}",
+            }),
+        });
+    }
+
+    private string ProjectDependencies(JsonElement args)
+    {
+        var filter = Arg(args, "project");
+        var limit = LimitArg(args, MaxRows);
+
+        // Resolve each edge endpoint to its owning project, then aggregate cross-project edges into a
+        // weighted project graph — the same derivation the CLI `map` (ProjectMapBuilder) uses.
+        var stepProj = _doc.ScenarioSteps.ToDictionary(s => s.Id, s => s.ProjectId);
+        var stepDefProj = _doc.StepDefinitions.ToDictionary(s => s.Id, s => s.ProjectId);
+        var methodProj = _doc.Methods.ToDictionary(m => m.Id, m => m.ProjectId);
+        var classProj = _doc.Classes.ToDictionary(c => c.Id, c => c.ProjectId);
+        int? ProjectOf(string kind, int? id) => id is not int i ? null : kind switch
+        {
+            RefKinds.ScenarioStep => stepProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.StepDefinition => stepDefProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.Method => methodProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.Class => classProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.Project => i,
+            _ => null,
+        };
+
+        var weight = new Dictionary<(int From, int To), int>();
+        foreach (var e in _doc.Edges)
+        {
+            if (e.EdgeKind == EdgeKinds.Unbound) continue;
+            if (ProjectOf(e.FromKind, e.FromId) is not int a || ProjectOf(e.ToKind, e.ToId) is not int b || a == b) continue;
+            weight[(a, b)] = weight.TryGetValue((a, b), out var w) ? w + 1 : 1;
+        }
+
+        var nameById = _doc.Projects.ToDictionary(p => p.Id, p => p.Name);
+        var projects = _doc.Projects.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(filter))
+            projects = projects.Where(p => p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
+
+        var rows = projects.OrderBy(p => p.Name, StringComparer.Ordinal).Take(limit).Select(p => new
+        {
+            project = p.Name,
+            dependsOn = weight.Where(kv => kv.Key.From == p.Id).OrderByDescending(kv => kv.Value)
+                .Select(kv => new { project = nameById.TryGetValue(kv.Key.To, out var n) ? n : null, edges = kv.Value }),
+            dependedOnBy = weight.Where(kv => kv.Key.To == p.Id).OrderByDescending(kv => kv.Value)
+                .Select(kv => new { project = nameById.TryGetValue(kv.Key.From, out var n) ? n : null, edges = kv.Value }),
+        }).ToList();
+
+        return Serialize(new { count = rows.Count, projects = rows });
+    }
+
+    /// <summary>
+    /// Best-effort extraction of a step expression's parameters: cucumber <c>{type}</c> placeholders,
+    /// regex alternation groups <c>(a|b|c)</c> as enum values, and any other capture group as a free
+    /// parameter. Degrades to an empty list rather than throwing on anything it doesn't recognise.
+    /// </summary>
+    private static IReadOnlyList<object> ExtractPlaceholders(string? expression, string expressionKind)
+    {
+        var list = new List<object>();
+        if (string.IsNullOrEmpty(expression)) return list;
+
+        if (expressionKind == ExpressionKinds.CucumberExpression)
+        {
+            foreach (Match m in Regex.Matches(expression, @"\{([^}]*)\}"))
+            {
+                var type = m.Groups[1].Value;
+                list.Add(new { kind = "typed", type = string.IsNullOrEmpty(type) ? "any" : type });
+            }
+            return list;
+        }
+
+        // regex: scan non-nested capture groups.
+        foreach (Match m in Regex.Matches(expression, @"\(([^()]*)\)"))
+        {
+            var inner = m.Groups[1].Value;
+            if (inner.StartsWith("?:", StringComparison.Ordinal)) inner = inner.Substring(2);
+            if (inner.Length == 0) continue;
+            var alts = inner.Split('|');
+            if (alts.Length > 1 && alts.All(a => a.Length > 0 && Regex.IsMatch(a, @"^[\w .\-]+$")))
+                list.Add(new { kind = "enum", values = alts });
+            else
+                list.Add(new { kind = "free", pattern = "(" + inner + ")" });
+        }
+        return list;
     }
 
     private static BindingKeyword ParseBindingKeyword(string? k) => (k ?? string.Empty).Trim().ToLowerInvariant() switch

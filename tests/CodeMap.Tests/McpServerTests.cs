@@ -202,6 +202,39 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
     }
 
     [Fact]
+    public void Step_catalog_extracts_a_cucumber_typed_placeholder()
+    {
+        var r = ToolCall("step_catalog", """{"query":"cart"}""");
+        var step = r.GetProperty("steps").EnumerateArray()
+            .Single(s => s.GetProperty("expression").GetString() == "a cart with {int} item(s)");
+        var ph = step.GetProperty("placeholders").EnumerateArray().First();
+        Assert.Equal("typed", ph.GetProperty("kind").GetString());
+        Assert.Equal("int", ph.GetProperty("type").GetString());
+    }
+
+    [Fact]
+    public void Coverage_gaps_reports_consistent_counts_and_lists()
+    {
+        var r = ToolCall("coverage_gaps");
+        // Counts are exact; the returned lists are capped but consistent when under the cap.
+        Assert.True(r.GetProperty("untestedEndpointCount").GetInt32() >= 0);
+        Assert.True(r.GetProperty("unusedStepDefinitionCount").GetInt32() >= 0);
+        Assert.True(r.GetProperty("untestedEndpoints").GetArrayLength() <= r.GetProperty("untestedEndpointCount").GetInt32());
+        Assert.True(r.GetProperty("unusedStepDefinitions").GetArrayLength() <= r.GetProperty("unusedStepDefinitionCount").GetInt32());
+    }
+
+    [Fact]
+    public void Project_dependencies_shows_the_cross_project_edge()
+    {
+        // The SpecFlow feature's "the customer checks out" binds to the Reqnroll CheckoutSteps —
+        // so Fixture.SpecFlow depends on Fixture.Reqnroll.
+        var r = ToolCall("project_dependencies", """{"project":"SpecFlow"}""");
+        var sf = r.GetProperty("projects").EnumerateArray().Single(p => p.GetProperty("project").GetString() == "Fixture.SpecFlow");
+        var deps = sf.GetProperty("dependsOn").EnumerateArray().Select(d => d.GetProperty("project").GetString());
+        Assert.Contains("Fixture.Reqnroll", deps);
+    }
+
+    [Fact]
     public void A_notification_without_an_id_gets_no_response()
         => Assert.Null(_server.HandleLine("""{"jsonrpc":"2.0","method":"notifications/initialized"}"""));
 
