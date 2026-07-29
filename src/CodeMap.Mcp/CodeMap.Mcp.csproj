@@ -24,9 +24,22 @@
     <ProjectReference Include="..\CodeMap.Core\CodeMap.Core.csproj" />
   </ItemGroup>
 
-  <!-- MCP server manifest — packed at the package root under .mcp/ where NuGet clients look for it. -->
+  <!-- MCP server manifest — packed at /.mcp/ where NuGet clients look for it. The checked-in file
+       keeps a "0.0.0-dev" placeholder version; the real <Version> is stamped in at pack time by the
+       target below, so the manifest version can never drift from the package version. -->
   <ItemGroup>
-    <None Include=".mcp/server.json" Pack="true" PackagePath="/.mcp/" />
+    <None Include="$(IntermediateOutputPath)server.json" Pack="true" PackagePath="/.mcp/server.json" Visible="false" />
   </ItemGroup>
+
+  <Target Name="StampMcpServerManifest" BeforeTargets="GenerateNuspec;Build">
+    <PropertyGroup>
+      <_McpManifestSrc>$(MSBuildProjectDirectory)/.mcp/server.json</_McpManifestSrc>
+      <_McpManifestOut>$(IntermediateOutputPath)server.json</_McpManifestOut>
+      <_McpManifestRaw>$([System.IO.File]::ReadAllText('$(_McpManifestSrc)'))</_McpManifestRaw>
+      <_McpManifestJson>$(_McpManifestRaw.Replace('0.0.0-dev', '$(Version)'))</_McpManifestJson>
+    </PropertyGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)" />
+    <WriteLinesToFile File="$(_McpManifestOut)" Lines="$(_McpManifestJson)" Overwrite="true" WriteOnlyWhenDifferent="true" />
+  </Target>
 
 </Project>
