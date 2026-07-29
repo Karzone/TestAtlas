@@ -31,8 +31,32 @@ dotnet test
 To try the CLI against the bundled sample:
 
 ```bash
-dotnet run --project src/TestAtlas.Cli -- index TestAtlas.sln --output codemap.db
+dotnet run --project src/CodeMap.Cli -- index samples/SampleShop/SampleShop.sln --output sampleshop.db
 ```
+
+## Project layout
+
+```text
+TestAtlas/
+├─ src/
+│  ├─ CodeMap.Core/     # analysis engine, model, SQLite storage, HTML builders
+│  ├─ CodeMap.Cli/      # thin CLI wrapper — packs as the `testatlas` dotnet tool
+│  └─ CodeMap.Mcp/      # MCP server — packs as `testatlas-mcp`
+├─ tests/
+│  ├─ CodeMap.Tests/    # unit / integration tests
+│  └─ fixtures/         # synthetic Reqnroll / SpecFlow / broken-solution shims
+├─ samples/             # real projects to point the tool at (SampleShop, ReqnrollLoginDemo)
+├─ docs/                # sample outputs + operational guides (troubleshooting, map freshness)
+├─ scripts/             # check-map-age.py + git hooks (map freshness / staleness)
+├─ specs/               # codemap-indexer.md, codemap-mcp.md — the full specifications
+└─ TestAtlas.sln
+```
+
+The project folders use the indexer's working name (**CodeMap**); the shipped packages, namespaces
+and tools are **TestAtlas** (`testatlas` / `testatlas-mcp`). See
+[`specs/codemap-indexer.md`](specs/codemap-indexer.md) for the complete specification: entity
+model, classification heuristics, CLI surface, SQLite schema contract, performance targets, and
+acceptance criteria.
 
 ## Making a change
 
