@@ -133,7 +133,7 @@ public sealed class McpServer
             "Resolve a Gherkin step phrase to the EXISTING step definition(s) that would bind it — the same way the runner does " +
             "(regex/cucumber expression, keyword-agnostic). Use this BEFORE writing a new step so an agent reuses what already exists " +
             "instead of authoring a duplicate. status is 'exact' (one binding — reuse it), 'ambiguous' (several match — a conflict to " +
-            "resolve), or 'none' (nothing binds; returns near-match suggestions to adapt). Each match returns the expression, the C# " +
+            "resolve), or 'none' (nothing binds — returns existing step definitions ranked by shared terms, to adapt rather than duplicate). Each match returns the expression, the C# " +
             "class/method, the method parameters, the argument values captured from the phrase, and file:line.",
             new
             {
@@ -286,6 +286,10 @@ public sealed class McpServer
         var matches = result.Matches
             .Select(m => int.TryParse(m.Binding.Reference, out var id) && sdById.TryGetValue(id, out var sd) ? (sd, m.Parameters) : default)
             .Where(x => x.sd is not null)
+            // A method decorated with e.g. [Given]+[When] yields several bindings for the SAME reusable
+            // step at one location — collapse them so it reads as one step, not a false 'ambiguous'.
+            .GroupBy(x => (x.sd!.FilePath, x.sd.LineStart, x.sd.Expression))
+            .Select(g => g.First())
             .Select(x => new
             {
                 expression = x.sd!.Expression,
@@ -299,21 +303,24 @@ public sealed class McpServer
             })
             .ToList();
 
-        var status = result.Confidence switch
-        {
-            MatchConfidence.Exact => "exact",
-            MatchConfidence.Ambiguous => "ambiguous",
-            _ => "none",
-        };
+        // Classify by distinct reusable steps: none / exact (reuse it) / ambiguous (a conflict to fix).
+        var status = matches.Count switch { 0 => "none", 1 => "exact", _ => "ambiguous" };
 
-        // No binding matched → offer near-matches (FTS over step text) so the agent adapts an existing
-        // step instead of authoring a duplicate. Empty when nothing is lexically close — then author anew.
+        // Nothing binds → rank existing step defs by how many of the phrase's salient tokens they share
+        // (an OR, not an all-tokens AND) so a near-miss that swaps a word still surfaces the closest
+        // steps to adapt — reuse-first. Empty only when nothing is lexically close; then author anew.
         object? suggestions = null;
-        if (result.Confidence == MatchConfidence.Unbound)
+        if (matches.Count == 0)
         {
-            var ids = MapReader.SearchSteps(_dbPath, text!).ToHashSet();
-            suggestions = _doc.StepDefinitions.Where(s => ids.Contains(s.Id)).Take(10)
-                .Select(s => new { expression = s.Expression, keyword = s.Keyword, location = $"{s.FilePath}:{s.LineStart}" });
+            var score = new Dictionary<int, int>();
+            foreach (var tok in SalientTokens(text!))
+                foreach (var id in MapReader.SearchSteps(_dbPath, tok))
+                    score[(int)id] = score.TryGetValue((int)id, out var n) ? n + 1 : 1;
+
+            suggestions = score.OrderByDescending(kv => kv.Value)
+                .Select(kv => sdById.TryGetValue(kv.Key, out var s) ? s : null)
+                .Where(s => s is not null).Take(10)
+                .Select(s => new { expression = s!.Expression, keyword = s.Keyword, location = $"{s.FilePath}:{s.LineStart}", sharedTerms = score[s.Id] });
         }
 
         return Serialize(new { status, text, matchCount = matches.Count, matches, suggestions });
@@ -368,6 +375,14 @@ public sealed class McpServer
     private static int LimitArg(JsonElement args, int def)
         => args.ValueKind == JsonValueKind.Object && args.TryGetProperty("limit", out var l) && l.ValueKind == JsonValueKind.Number
             ? Math.Clamp(l.GetInt32(), 1, MaxRows) : def;
+
+    /// <summary>Distinct alphanumeric tokens (length &gt; 2) from a phrase — the terms worth OR-searching for near-matches.</summary>
+    private static IEnumerable<string> SalientTokens(string text)
+        => (text ?? string.Empty)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => new string(t.Where(char.IsLetterOrDigit).ToArray()))
+            .Where(t => t.Length > 2)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 
     // ---- JSON-RPC plumbing -------------------------------------------------------------------------
 

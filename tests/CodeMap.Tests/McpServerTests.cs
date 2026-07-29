@@ -145,6 +145,17 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
     }
 
     [Fact]
+    public void Resolve_step_suggests_the_closest_existing_step_for_a_near_miss()
+    {
+        // "the customer checks in" binds nothing, but shares "customer"/"checks" with the existing
+        // "the customer checks out" — so the ranked suggestions must surface it (reuse-first).
+        var r = ToolCall("resolve_step", """{"text":"the customer checks in"}""");
+        Assert.Equal("none", r.GetProperty("status").GetString());
+        var suggested = r.GetProperty("suggestions").EnumerateArray().Select(s => s.GetProperty("expression").GetString());
+        Assert.Contains("the customer checks out", suggested);
+    }
+
+    [Fact]
     public void Unbound_steps_lists_the_deliberately_unbound_step()
     {
         var r = ToolCall("unbound_steps");
