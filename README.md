@@ -5,7 +5,7 @@
 </h1>
 
 <p align="center">
-  <strong>A queryable, semantic map of your .NET test-automation solution — in one SQLite file.</strong>
+  <strong>A queryable, semantic map of your .NET test-automation solution — in one SQLite file, served to your AI agent over MCP.</strong>
 </p>
 
 <p align="center">
@@ -13,12 +13,23 @@
 </p>
 
 <p align="center">
-  <img alt="status" src="https://img.shields.io/badge/status-v0.1.1%20released-brightgreen">
-  <a href="https://www.nuget.org/packages/TestAtlas.Cli"><img alt="nuget" src="https://img.shields.io/nuget/v/TestAtlas.Cli?logo=nuget&label=NuGet&color=004880"></a>
-  <img alt="dotnet" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
-  <img alt="output" src="https://img.shields.io/badge/output-SQLite-003B57?logo=sqlite&logoColor=white">
-  <img alt="mcp" src="https://img.shields.io/badge/MCP-ready-7C3AED">
-  <img alt="license" src="https://img.shields.io/badge/license-MIT-blue">
+  <a href="https://www.nuget.org/packages/TestAtlas.Mcp"><img alt="TestAtlas.Mcp on NuGet" src="https://img.shields.io/nuget/v/TestAtlas.Mcp?logo=nuget&label=TestAtlas.Mcp&color=004880"></a>
+  <a href="https://www.nuget.org/packages/TestAtlas.Cli"><img alt="TestAtlas.Cli on NuGet" src="https://img.shields.io/nuget/v/TestAtlas.Cli?logo=nuget&label=TestAtlas.Cli&color=004880"></a>
+  <img alt=".NET 8.0" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
+  <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue">
+</p>
+
+<p align="center">
+  <img alt="Model Context Protocol — listed" src="https://img.shields.io/badge/Model_Context_Protocol-listed-7C3AED">
+  <img alt="transport stdio" src="https://img.shields.io/badge/transport-stdio-555">
+  <img alt="auth none" src="https://img.shields.io/badge/auth-none-2ea44f">
+  <img alt="hosting local" src="https://img.shields.io/badge/hosting-local-555">
+  <img alt="no AI, offline, deterministic" src="https://img.shields.io/badge/no_AI-offline,_deterministic-brightgreen">
+</p>
+
+<p align="center">
+  <sub><b>MCP tools</b></sub><br>
+  <code>stats</code> &nbsp;·&nbsp; <code>impact</code> &nbsp;·&nbsp; <code>search_steps</code> &nbsp;·&nbsp; <code>search_scenarios</code> &nbsp;·&nbsp; <code>list_endpoints</code>
 </p>
 
 <p align="center">
@@ -29,6 +40,24 @@
   <a href="#-keeping-the-map-fresh">Keeping fresh</a> ·
   <a href="#-roadmap">Roadmap</a>
 </p>
+
+---
+
+## ⚡ Add to your AI agent
+
+```bash
+dotnet tool install --global TestAtlas.Mcp     # the MCP server  (and TestAtlas.Cli to build maps)
+```
+
+Point your agent at it via `.mcp.json` — **Visual Studio**, **VS Code / Copilot**, or **Claude Code**:
+
+```json
+{ "servers": { "testatlas": { "type": "stdio", "command": "testatlas-mcp" } } }
+```
+
+Run `testatlas index <your-solution>` first so there's a `codemap.db` to serve. Full setup — agent
+registration, map auto-discovery, and running from source — is in
+**[Use it from an AI agent](#-use-it-from-an-ai-agent-mcp)**.
 
 ---
 
