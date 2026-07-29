@@ -168,6 +168,40 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
     }
 
     [Fact]
+    public void Get_scenario_returns_the_ordered_steps_and_feature()
+    {
+        var r = ToolCall("get_scenario", """{"name":"Successful sign in"}""");
+        Assert.Equal(1, r.GetProperty("count").GetInt32());
+        var sc = r.GetProperty("scenarios")[0];
+        Assert.Equal("Login", sc.GetProperty("feature").GetString());
+        var steps = sc.GetProperty("steps").EnumerateArray().Select(s => s.GetProperty("text").GetString()).ToList();
+        Assert.Equal(4, steps.Count); // Given/When/Then/And
+        Assert.Contains("the dashboard is shown", steps);
+        Assert.Contains("pigs can fly", steps);
+    }
+
+    [Fact]
+    public void Get_step_definition_returns_detail_and_the_scenarios_that_use_it()
+    {
+        var r = ToolCall("get_step_definition", """{"query":"dashboard"}""");
+        Assert.Equal(1, r.GetProperty("count").GetInt32());
+        var d = r.GetProperty("stepDefinitions")[0];
+        Assert.Equal("the dashboard is shown", d.GetProperty("expression").GetString());
+        Assert.Equal("LoginSteps", d.GetProperty("class").GetString());
+        var users = d.GetProperty("usedByScenarios").EnumerateArray().Select(s => s.GetString());
+        Assert.Contains("Successful sign in", users);
+    }
+
+    [Fact]
+    public void List_tags_counts_the_smoke_tag()
+    {
+        var r = ToolCall("list_tags");
+        var smoke = r.GetProperty("tags").EnumerateArray().SingleOrDefault(t => t.GetProperty("tag").GetString() == "@smoke");
+        Assert.Equal(JsonValueKind.Object, smoke.ValueKind);
+        Assert.True(smoke.GetProperty("scenarios").GetInt32() >= 1);
+    }
+
+    [Fact]
     public void A_notification_without_an_id_gets_no_response()
         => Assert.Null(_server.HandleLine("""{"jsonrpc":"2.0","method":"notifications/initialized"}"""));
 

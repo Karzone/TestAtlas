@@ -153,6 +153,42 @@ public sealed class McpServer
             "definitions are missing across the suite.",
             new { type = "object", properties = new { limit = new { type = "integer", description = "Max rows (default 50)." } } },
             UnboundSteps),
+
+        new("get_scenario",
+            "Full detail of scenario(s) whose name contains the given text: feature, tags, kind, example-row count, file:line, " +
+            "and the ordered steps (keyword + text + doc-string/data-table flags). Use to read an existing scenario before writing a similar one.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string", description = "Substring of the scenario name to match (case-insensitive)." },
+                    limit = new { type = "integer", description = "Max scenarios (default 10)." },
+                },
+                required = new[] { "name" },
+            },
+            GetScenario),
+
+        new("get_step_definition",
+            "Full detail of step definition(s) whose expression contains the given text: keyword, expression kind, method parameters, " +
+            "C# class/method/signature, file:line, and the scenarios that currently use it (usage count). Use to inspect a step before reusing or changing it.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Substring of the step-definition expression to match (case-insensitive)." },
+                    limit = new { type = "integer", description = "Max definitions (default 20)." },
+                },
+                required = new[] { "query" },
+            },
+            GetStepDefinition),
+
+        new("list_tags",
+            "The tag taxonomy across the suite — every scenario tag (e.g. @smoke, @regression, ticket ids) with the number of scenarios " +
+            "carrying it, most-used first. Use to tag new scenarios consistently with what already exists.",
+            new { type = "object", properties = new { limit = new { type = "integer", description = "Max tags (default 200)." } } },
+            ListTags),
     };
 
     private string Stats()
@@ -355,6 +391,97 @@ public sealed class McpServer
         });
 
         return Serialize(new { count = all.Count, truncated = all.Count > limit ? all.Count - limit : 0, steps = rows });
+    }
+
+    private string GetScenario(JsonElement args)
+    {
+        var name = Arg(args, "name");
+        if (string.IsNullOrWhiteSpace(name)) return Serialize(new { error = "get_scenario requires 'name'." });
+        var limit = LimitArg(args, 10);
+
+        var featureById = _doc.Features.ToDictionary(f => f.Id);
+        var stepsByScenario = _doc.ScenarioSteps.GroupBy(s => s.ScenarioId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Ordinal).ToList());
+
+        var matches = _doc.Scenarios
+            .Where(s => s.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.FilePath, StringComparer.Ordinal).ThenBy(s => s.LineStart)
+            .Take(limit)
+            .Select(s => new
+            {
+                scenario = s.Name,
+                feature = featureById.TryGetValue(s.FeatureId, out var f) ? f.Name : null,
+                kind = s.Kind,
+                tags = string.IsNullOrEmpty(s.Tags) ? null : s.Tags,
+                exampleRowCount = s.ExampleRowCount,
+                location = $"{s.FilePath}:{s.LineStart}",
+                steps = (stepsByScenario.TryGetValue(s.Id, out var st) ? st : new List<ScenarioStepRow>())
+                    .Select(x => new { keyword = x.Keyword, text = x.Text, hasDocString = x.HasDocString, hasDataTable = x.HasDataTable }),
+            })
+            .ToList();
+
+        return Serialize(new { count = matches.Count, scenarios = matches });
+    }
+
+    private string GetStepDefinition(JsonElement args)
+    {
+        var query = Arg(args, "query");
+        if (string.IsNullOrWhiteSpace(query)) return Serialize(new { error = "get_step_definition requires 'query'." });
+        var limit = LimitArg(args, 20);
+
+        // step_definition id -> the scenario names that bind it (via binds_to edges: scenario_step -> step_definition).
+        var scenarioByStep = _doc.ScenarioSteps.ToDictionary(s => s.Id, s => s.ScenarioId);
+        var scenarioNameById = _doc.Scenarios.ToDictionary(s => s.Id, s => s.Name);
+        var scenariosByDef = _doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.BindsTo && e.ToKind == RefKinds.StepDefinition && e.ToId is not null)
+            .GroupBy(e => e.ToId!.Value)
+            .ToDictionary(g => g.Key, g => g
+                .Select(e => scenarioByStep.TryGetValue(e.FromId, out var sc) ? sc : (int?)null)
+                .Where(x => x is not null).Select(x => x!.Value).Distinct().ToList());
+
+        var matches = _doc.StepDefinitions
+            .Where(s => s.Expression.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(limit)
+            .Select(s =>
+            {
+                var scenarioIds = scenariosByDef.TryGetValue(s.Id, out var l) ? l : new List<int>();
+                var method = _doc.Methods.FirstOrDefault(m => m.Id == s.MethodId);
+                return new
+                {
+                    expression = s.Expression,
+                    keyword = s.Keyword,
+                    expressionKind = s.ExpressionKind,
+                    methodParameters = s.Parameters,
+                    @class = _doc.Classes.FirstOrDefault(c => c.Id == s.ClassId)?.Name,
+                    method = method?.Name,
+                    signature = method?.Signature,
+                    location = $"{s.FilePath}:{s.LineStart}",
+                    usageCount = scenarioIds.Count,
+                    usedByScenarios = scenarioIds.Select(id => scenarioNameById.TryGetValue(id, out var n) ? n : null)
+                        .Where(n => n is not null).Take(25),
+                };
+            })
+            .ToList();
+
+        return Serialize(new { count = matches.Count, stepDefinitions = matches });
+    }
+
+    private string ListTags(JsonElement args)
+    {
+        var limit = LimitArg(args, MaxRows);
+        // Scenario tags are own + inherited (the model already folds in feature tags), so counting
+        // scenarios per tag gives the true reach without double-counting the feature.
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var s in _doc.Scenarios)
+        {
+            if (string.IsNullOrWhiteSpace(s.Tags)) continue;
+            foreach (var tag in s.Tags.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                counts[tag] = counts.TryGetValue(tag, out var n) ? n + 1 : 1;
+        }
+
+        var rows = counts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Take(limit).Select(kv => new { tag = kv.Key, scenarios = kv.Value });
+        return Serialize(new { total = counts.Count, tags = rows });
     }
 
     private static BindingKeyword ParseBindingKeyword(string? k) => (k ?? string.Empty).Trim().ToLowerInvariant() switch
