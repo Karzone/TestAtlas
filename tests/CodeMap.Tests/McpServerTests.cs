@@ -99,7 +99,11 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
         var res = Call("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
         var names = res.GetProperty("result").GetProperty("tools").EnumerateArray()
             .Select(t => t.GetProperty("name").GetString()).ToHashSet();
-        Assert.Superset(new HashSet<string?> { "resolve_step", "unbound_steps" }, names);
+        Assert.Superset(new HashSet<string?>
+        {
+            "resolve_step", "unbound_steps", "get_scenario", "get_step_definition",
+            "step_catalog", "coverage_gaps", "list_tags", "project_dependencies",
+        }, names);
     }
 
     [Fact]

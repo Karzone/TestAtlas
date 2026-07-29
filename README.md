@@ -315,8 +315,14 @@ claude mcp add testatlas -- src/CodeMap.Mcp/bin/Release/net8.0/TestAtlas.Mcp.exe
 - `search_steps` — full-text search over step definitions (expression text + method + class name).
 - `search_scenarios` — full-text search over scenarios (feature + scenario name + step text + tags).
 - `list_endpoints` — the HTTP endpoints the suite calls, each with verb, route, and scenario blast radius (highest-reach first).
-- `resolve_step` — resolve a Gherkin phrase to the existing step definition(s) that would bind it (regex/cucumber, keyword-agnostic). `exact` / `ambiguous` / `none` (+ near-match suggestions). Reuse-first authoring: don't write a step that already exists.
+- `resolve_step` — resolve a Gherkin phrase to the existing step definition(s) that would bind it (regex/cucumber, keyword-agnostic). `exact` / `ambiguous` / `none` (+ near-match suggestions ranked by shared terms). Reuse-first authoring: don't write a step that already exists.
 - `unbound_steps` — scenario steps that match no step definition — the glue an agent must implement, each with its scenario, feature, and file:line.
+- `get_scenario` — full detail of scenario(s) by name: feature, tags, kind, example-row count, and the ordered steps.
+- `get_step_definition` — full detail of step definition(s) by expression: keyword, params, C# class/method/signature, and the scenarios that use it.
+- `step_catalog` — the reusable step vocabulary with extracted placeholders and allowed values (cucumber `{type}`, regex `(a|b)` enums). Compose scenarios from what exists.
+- `coverage_gaps` — untested endpoints (zero scenario reach) and unused step definitions (dead glue).
+- `list_tags` — the tag taxonomy with per-tag scenario counts, most-used first — tag new scenarios consistently.
+- `project_dependencies` — the implied project dependency graph (depends-on / depended-on-by), e.g. *"what depends on the Party project?"*.
 
 > [!IMPORTANT]
 > MCP clients load servers **at session start**. If you register the server mid-session, restart
