@@ -145,7 +145,7 @@ dotnet run --project src/CodeMap.Cli -- index path/to/YourSolution.sln
 
 ---
 
-## 🛠️ Troubleshooting
+## 🛠 Troubleshooting
 
 <details>
 <summary><b><code>dotnet tool install</code> fails with <code>401 Unauthorized</code> on a corporate machine</b></summary>
