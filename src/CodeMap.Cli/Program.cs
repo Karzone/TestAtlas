@@ -456,26 +456,47 @@ public static class Commands
         error = null;
         inputPath = string.Empty;
 
-        if (!string.IsNullOrWhiteSpace(positional))
-        {
-            if (!File.Exists(positional)) { error = $"input not found: {positional}"; return false; }
-            inputPath = positional;
-            return true;
-        }
+        // No path given → auto-discover in the current directory.
+        if (string.IsNullOrWhiteSpace(positional))
+            return TryDiscoverInput(Directory.GetCurrentDirectory(), fromCurrentDir: true, out inputPath, out error);
 
-        var cwd = Directory.GetCurrentDirectory();
-        var slns = Directory.GetFiles(cwd, "*.sln");
+        // A path to an existing file (.sln / .csproj) → use it directly.
+        if (File.Exists(positional)) { inputPath = positional; return true; }
+
+        // A path to a folder → auto-discover a single .sln/.csproj inside it (the intuitive case).
+        if (Directory.Exists(positional))
+            return TryDiscoverInput(positional, fromCurrentDir: false, out inputPath, out error);
+
+        error = $"input not found: {positional} — pass a .sln or .csproj file, a folder that contains one, "
+              + "or run 'testatlas index' with no path from your solution folder.";
+        return false;
+    }
+
+    // Find a single .sln (preferred) or .csproj directly inside a directory, with actionable errors.
+    private static bool TryDiscoverInput(string dir, bool fromCurrentDir, out string inputPath, out string? error)
+    {
+        error = null;
+        inputPath = string.Empty;
+        var where = fromCurrentDir ? "the current directory" : $"'{dir}'";
+
+        var slns = Directory.GetFiles(dir, "*.sln");
         if (slns.Length == 1) { inputPath = slns[0]; return true; }
         if (slns.Length > 1)
         {
-            error = "multiple .sln files found; specify one explicitly.";
+            error = $"found {slns.Length} .sln files in {where}; specify one, e.g. 'testatlas index \"{slns[0]}\"'.";
             return false;
         }
 
-        var projs = Directory.GetFiles(cwd, "*.csproj");
+        var projs = Directory.GetFiles(dir, "*.csproj");
         if (projs.Length == 1) { inputPath = projs[0]; return true; }
+        if (projs.Length > 1)
+        {
+            error = $"found {projs.Length} .csproj files in {where}; specify one, e.g. 'testatlas index \"{projs[0]}\"'.";
+            return false;
+        }
 
-        error = "no .sln (or single .csproj) found in the current directory; specify a path.";
+        error = $"no .sln or .csproj found in {where}; pass a path to a .sln/.csproj file "
+              + "(your solution may be in a subfolder).";
         return false;
     }
 

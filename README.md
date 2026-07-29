@@ -95,8 +95,8 @@ testatlas report        # writes codemap.html
 testatlas map           # writes codemap-map.html
 ```
 
-Run `index` with no path and TestAtlas auto-discovers a single `.sln`/`.csproj` in the current
-directory. The map is written atomically to `./codemap.db`.
+Run `index` with no path — or point it at a **folder** — and TestAtlas auto-discovers a single
+`.sln`/`.csproj` there. The map is written atomically to `./codemap.db`.
 
 <details>
 <summary><b>Or run from source</b> (no install)</summary>
