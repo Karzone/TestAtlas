@@ -315,6 +315,8 @@ claude mcp add testatlas -- src/CodeMap.Mcp/bin/Release/net8.0/TestAtlas.Mcp.exe
 - `search_steps` — full-text search over step definitions (expression text + method + class name).
 - `search_scenarios` — full-text search over scenarios (feature + scenario name + step text + tags).
 - `list_endpoints` — the HTTP endpoints the suite calls, each with verb, route, and scenario blast radius (highest-reach first).
+- `resolve_step` — resolve a Gherkin phrase to the existing step definition(s) that would bind it (regex/cucumber, keyword-agnostic). `exact` / `ambiguous` / `none` (+ near-match suggestions). Reuse-first authoring: don't write a step that already exists.
+- `unbound_steps` — scenario steps that match no step definition — the glue an agent must implement, each with its scenario, feature, and file:line.
 
 > [!IMPORTANT]
 > MCP clients load servers **at session start**. If you register the server mid-session, restart

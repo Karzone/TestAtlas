@@ -1,5 +1,7 @@
 using System.Text.Json;
 using TestAtlas.Core.Analysis;
+using TestAtlas.Core.Binding;
+using TestAtlas.Core.Model;
 using TestAtlas.Core.Storage;
 
 namespace TestAtlas.Mcp;
@@ -126,6 +128,31 @@ public sealed class McpServer
         new("list_endpoints", "The HTTP endpoints/operations the suite calls, each with verb, route (real path when known), and its scenario blast radius. Highest-reach first.",
             new { type = "object", properties = new { limit = new { type = "integer", description = "Max rows (default 50)." } } },
             ListEndpoints),
+
+        new("resolve_step",
+            "Resolve a Gherkin step phrase to the EXISTING step definition(s) that would bind it — the same way the runner does " +
+            "(regex/cucumber expression, keyword-agnostic). Use this BEFORE writing a new step so an agent reuses what already exists " +
+            "instead of authoring a duplicate. status is 'exact' (one binding — reuse it), 'ambiguous' (several match — a conflict to " +
+            "resolve), or 'none' (nothing binds; returns near-match suggestions to adapt). Each match returns the expression, the C# " +
+            "class/method, the method parameters, the argument values captured from the phrase, and file:line.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    text = new { type = "string", description = "The step phrase to resolve, without the leading Given/When/Then keyword (e.g. \"the customer checks out\")." },
+                    keyword = new { type = "string", @enum = new[] { "given", "when", "then" }, description = "Optional; informational only — matching is keyword-agnostic, as in Reqnroll/SpecFlow." },
+                },
+                required = new[] { "text" },
+            },
+            ResolveStep),
+
+        new("unbound_steps",
+            "Scenario steps that match NO step definition (unbound) — the glue an agent must implement before those scenarios can run. " +
+            "Each row: the step text, its keyword, the owning scenario + feature, and file:line. Use this to see exactly what step " +
+            "definitions are missing across the suite.",
+            new { type = "object", properties = new { limit = new { type = "integer", description = "Max rows (default 50)." } } },
+            UnboundSteps),
     };
 
     private string Stats()
@@ -231,6 +258,116 @@ public sealed class McpServer
             });
         return Serialize(new { total = _doc.Endpoints.Count, endpoints = rows });
     }
+
+    private string ResolveStep(JsonElement args)
+    {
+        var text = Arg(args, "text");
+        if (string.IsNullOrWhiteSpace(text))
+            return Serialize(new { error = "resolve_step requires 'text' (the step phrase to resolve)." });
+
+        // Build + compile candidate bindings from the map's step definitions, tying each back to its
+        // StepDefinition id via the binding Reference. This reuses the exact matcher the indexer binds
+        // with, so "would this phrase bind?" matches runtime resolution (regex/cucumber, keyword-agnostic).
+        var compiled = new List<CompiledBinding>(_doc.StepDefinitions.Count);
+        foreach (var sd in _doc.StepDefinitions)
+        {
+            var binding = new StepBinding(
+                ParseBindingKeyword(sd.Keyword),
+                sd.Expression,
+                sd.ExpressionKind == ExpressionKinds.CucumberExpression ? ExpressionKind.CucumberExpression : ExpressionKind.Regex,
+                Reference: sd.Id.ToString());
+            var c = StepMatcher.Compile(binding);
+            if (c is not null) compiled.Add(c);
+        }
+
+        var result = StepMatcher.Match(new ScenarioStepInput(ParseStepKeyword(Arg(args, "keyword")), text), compiled);
+
+        var sdById = _doc.StepDefinitions.ToDictionary(s => s.Id);
+        var matches = result.Matches
+            .Select(m => int.TryParse(m.Binding.Reference, out var id) && sdById.TryGetValue(id, out var sd) ? (sd, m.Parameters) : default)
+            .Where(x => x.sd is not null)
+            .Select(x => new
+            {
+                expression = x.sd!.Expression,
+                expressionKind = x.sd.ExpressionKind,
+                keyword = x.sd.Keyword,
+                capturedArguments = x.Parameters,
+                methodParameters = x.sd.Parameters,
+                @class = _doc.Classes.FirstOrDefault(c => c.Id == x.sd.ClassId)?.Name,
+                method = _doc.Methods.FirstOrDefault(mm => mm.Id == x.sd.MethodId)?.Name,
+                location = $"{x.sd.FilePath}:{x.sd.LineStart}",
+            })
+            .ToList();
+
+        var status = result.Confidence switch
+        {
+            MatchConfidence.Exact => "exact",
+            MatchConfidence.Ambiguous => "ambiguous",
+            _ => "none",
+        };
+
+        // No binding matched → offer near-matches (FTS over step text) so the agent adapts an existing
+        // step instead of authoring a duplicate. Empty when nothing is lexically close — then author anew.
+        object? suggestions = null;
+        if (result.Confidence == MatchConfidence.Unbound)
+        {
+            var ids = MapReader.SearchSteps(_dbPath, text!).ToHashSet();
+            suggestions = _doc.StepDefinitions.Where(s => ids.Contains(s.Id)).Take(10)
+                .Select(s => new { expression = s.Expression, keyword = s.Keyword, location = $"{s.FilePath}:{s.LineStart}" });
+        }
+
+        return Serialize(new { status, text, matchCount = matches.Count, matches, suggestions });
+    }
+
+    private string UnboundSteps(JsonElement args)
+    {
+        var limit = LimitArg(args, 50);
+        var unboundIds = _doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.Unbound && e.FromKind == RefKinds.ScenarioStep)
+            .Select(e => e.FromId).ToHashSet();
+
+        var scenarioById = _doc.Scenarios.ToDictionary(s => s.Id);
+        var featureById = _doc.Features.ToDictionary(f => f.Id);
+
+        var all = _doc.ScenarioSteps.Where(s => unboundIds.Contains(s.Id))
+            .OrderBy(s => s.FilePath, StringComparer.Ordinal).ThenBy(s => s.LineStart)
+            .ToList();
+
+        var rows = all.Take(limit).Select(st =>
+        {
+            var sc = scenarioById.TryGetValue(st.ScenarioId, out var s) ? s : null;
+            var feature = sc is not null && featureById.TryGetValue(sc.FeatureId, out var f) ? f.Name : null;
+            return new
+            {
+                step = st.Text,
+                keyword = st.Keyword,
+                scenario = sc?.Name,
+                feature,
+                location = $"{st.FilePath}:{st.LineStart}",
+            };
+        });
+
+        return Serialize(new { count = all.Count, truncated = all.Count > limit ? all.Count - limit : 0, steps = rows });
+    }
+
+    private static BindingKeyword ParseBindingKeyword(string? k) => (k ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "given" => BindingKeyword.Given,
+        "when" => BindingKeyword.When,
+        "then" => BindingKeyword.Then,
+        _ => BindingKeyword.StepDefinition,
+    };
+
+    private static StepKeyword ParseStepKeyword(string? k) => (k ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "when" => StepKeyword.When,
+        "then" => StepKeyword.Then,
+        _ => StepKeyword.Given,
+    };
+
+    private static int LimitArg(JsonElement args, int def)
+        => args.ValueKind == JsonValueKind.Object && args.TryGetProperty("limit", out var l) && l.ValueKind == JsonValueKind.Number
+            ? Math.Clamp(l.GetInt32(), 1, MaxRows) : def;
 
     // ---- JSON-RPC plumbing -------------------------------------------------------------------------
 

@@ -94,6 +94,69 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
     }
 
     [Fact]
+    public void New_authoring_tools_are_advertised()
+    {
+        var res = Call("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
+        var names = res.GetProperty("result").GetProperty("tools").EnumerateArray()
+            .Select(t => t.GetProperty("name").GetString()).ToHashSet();
+        Assert.Superset(new HashSet<string?> { "resolve_step", "unbound_steps" }, names);
+    }
+
+    [Fact]
+    public void Resolve_step_binds_a_phrase_to_the_existing_definition_cross_project()
+    {
+        // "the customer checks out" is only defined in the Reqnroll project (CheckoutSteps) — a
+        // SpecFlow feature's step still resolves to it. Exactly one binding → 'exact'.
+        var r = ToolCall("resolve_step", """{"text":"the customer checks out"}""");
+        Assert.Equal("exact", r.GetProperty("status").GetString());
+        Assert.Equal(1, r.GetProperty("matchCount").GetInt32());
+        var m = r.GetProperty("matches")[0];
+        Assert.Equal("the customer checks out", m.GetProperty("expression").GetString());
+        Assert.Equal("CheckoutSteps", m.GetProperty("class").GetString());
+    }
+
+    [Fact]
+    public void Resolve_step_captures_the_argument_values_from_the_phrase()
+    {
+        // "a user named (.*)" binds "a user named Alice", capturing "Alice".
+        var r = ToolCall("resolve_step", """{"text":"a user named Alice"}""");
+        Assert.Equal("exact", r.GetProperty("status").GetString());
+        var captured = r.GetProperty("matches")[0].GetProperty("capturedArguments").EnumerateArray()
+            .Select(a => a.GetString());
+        Assert.Contains("Alice", captured);
+    }
+
+    [Fact]
+    public void Resolve_step_flags_an_ambiguous_phrase_matching_two_definitions()
+    {
+        // Both "the system is ready" and "the system is (.*)" match — a conflict to resolve.
+        var r = ToolCall("resolve_step", """{"text":"the system is ready"}""");
+        Assert.Equal("ambiguous", r.GetProperty("status").GetString());
+        Assert.Equal(2, r.GetProperty("matchCount").GetInt32());
+    }
+
+    [Fact]
+    public void Resolve_step_returns_none_when_nothing_binds()
+    {
+        // "pigs can fly" is the fixture's deliberately-unbound step — no definition matches.
+        var r = ToolCall("resolve_step", """{"text":"pigs can fly"}""");
+        Assert.Equal("none", r.GetProperty("status").GetString());
+        Assert.Equal(0, r.GetProperty("matchCount").GetInt32());
+    }
+
+    [Fact]
+    public void Unbound_steps_lists_the_deliberately_unbound_step()
+    {
+        var r = ToolCall("unbound_steps");
+        Assert.True(r.GetProperty("count").GetInt32() >= 1);
+        var texts = r.GetProperty("steps").EnumerateArray().Select(s => s.GetProperty("step").GetString());
+        Assert.Contains("pigs can fly", texts);
+        var pig = r.GetProperty("steps").EnumerateArray().Single(s => s.GetProperty("step").GetString() == "pigs can fly");
+        Assert.Equal("Successful sign in", pig.GetProperty("scenario").GetString());
+        Assert.Equal("Login", pig.GetProperty("feature").GetString());
+    }
+
+    [Fact]
     public void A_notification_without_an_id_gets_no_response()
         => Assert.Null(_server.HandleLine("""{"jsonrpc":"2.0","method":"notifications/initialized"}"""));
 
