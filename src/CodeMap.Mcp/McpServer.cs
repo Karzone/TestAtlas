@@ -1,5 +1,8 @@
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using TestAtlas.Core.Analysis;
+using TestAtlas.Core.Binding;
+using TestAtlas.Core.Model;
 using TestAtlas.Core.Storage;
 
 namespace TestAtlas.Mcp;
@@ -126,6 +129,91 @@ public sealed class McpServer
         new("list_endpoints", "The HTTP endpoints/operations the suite calls, each with verb, route (real path when known), and its scenario blast radius. Highest-reach first.",
             new { type = "object", properties = new { limit = new { type = "integer", description = "Max rows (default 50)." } } },
             ListEndpoints),
+
+        new("resolve_step",
+            "Resolve a Gherkin step phrase to the EXISTING step definition(s) that would bind it — the same way the runner does " +
+            "(regex/cucumber expression, keyword-agnostic). Use this BEFORE writing a new step so an agent reuses what already exists " +
+            "instead of authoring a duplicate. status is 'exact' (one binding — reuse it), 'ambiguous' (several match — a conflict to " +
+            "resolve), or 'none' (nothing binds — returns existing step definitions ranked by shared terms, to adapt rather than duplicate). Each match returns the expression, the C# " +
+            "class/method, the method parameters, the argument values captured from the phrase, and file:line.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    text = new { type = "string", description = "The step phrase to resolve, without the leading Given/When/Then keyword (e.g. \"the customer checks out\")." },
+                    keyword = new { type = "string", @enum = new[] { "given", "when", "then" }, description = "Optional; informational only — matching is keyword-agnostic, as in Reqnroll/SpecFlow." },
+                },
+                required = new[] { "text" },
+            },
+            ResolveStep),
+
+        new("get_scenario",
+            "Full detail of scenario(s) whose name contains the given text: feature, tags, kind, example-row count, file:line, " +
+            "and the ordered steps (keyword + text + doc-string/data-table flags). Use to read an existing scenario before writing a similar one.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    name = new { type = "string", description = "Substring of the scenario name to match (case-insensitive)." },
+                    limit = new { type = "integer", description = "Max scenarios (default 10)." },
+                },
+                required = new[] { "name" },
+            },
+            GetScenario),
+
+        new("get_step_definition",
+            "Full detail of step definition(s) whose expression contains the given text: keyword, expression kind, method parameters, " +
+            "C# class/method/signature, file:line, and the scenarios that currently use it (usage count). Use to inspect a step before reusing or changing it.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Substring of the step-definition expression to match (case-insensitive)." },
+                    limit = new { type = "integer", description = "Max definitions (default 20)." },
+                },
+                required = new[] { "query" },
+            },
+            GetStepDefinition),
+
+        new("list_tags",
+            "The tag taxonomy across the suite — every scenario tag (e.g. @smoke, @regression, ticket ids) with the number of scenarios " +
+            "carrying it, most-used first. Use to tag new scenarios consistently with what already exists.",
+            new { type = "object", properties = new { limit = new { type = "integer", description = "Max tags (default 200)." } } },
+            ListTags),
+
+        new("step_catalog",
+            "The reusable step vocabulary: step definitions with their placeholders and (best-effort) allowed values pulled from the " +
+            "expression — cucumber {int}/{string}/{word}, regex alternations like (Auto|Allianz) as enum values, other groups as free " +
+            "parameters. Use to compose new scenarios from steps and values that already exist. Optional keyword/query filters.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    keyword = new { type = "string", @enum = new[] { "given", "when", "then", "stepdefinition" }, description = "Optional: only steps declared with this attribute keyword." },
+                    query = new { type = "string", description = "Optional: only steps whose expression contains this text." },
+                    limit = new { type = "integer", description = "Max steps (default 100)." },
+                },
+            },
+            StepCatalog),
+
+        new("project_dependencies",
+            "The project dependency graph the suite implies: for each project, which projects it depends on and which depend on it, " +
+            "derived from cross-project binds_to/uses_type/inherits edges (edge counts as weight). Answers e.g. \"what depends on the " +
+            "Party project?\". Optional 'project' name filter.",
+            new
+            {
+                type = "object",
+                properties = new
+                {
+                    project = new { type = "string", description = "Optional: substring of a project name to focus on (case-insensitive)." },
+                    limit = new { type = "integer", description = "Max projects (default 200)." },
+                },
+            },
+            ProjectDependencies),
     };
 
     private string Stats()
@@ -231,6 +319,298 @@ public sealed class McpServer
             });
         return Serialize(new { total = _doc.Endpoints.Count, endpoints = rows });
     }
+
+    private string ResolveStep(JsonElement args)
+    {
+        var text = Arg(args, "text");
+        if (string.IsNullOrWhiteSpace(text))
+            return Serialize(new { error = "resolve_step requires 'text' (the step phrase to resolve)." });
+
+        // Build + compile candidate bindings from the map's step definitions, tying each back to its
+        // StepDefinition id via the binding Reference. This reuses the exact matcher the indexer binds
+        // with, so "would this phrase bind?" matches runtime resolution (regex/cucumber, keyword-agnostic).
+        var compiled = new List<CompiledBinding>(_doc.StepDefinitions.Count);
+        foreach (var sd in _doc.StepDefinitions)
+        {
+            var binding = new StepBinding(
+                ParseBindingKeyword(sd.Keyword),
+                sd.Expression,
+                sd.ExpressionKind == ExpressionKinds.CucumberExpression ? ExpressionKind.CucumberExpression : ExpressionKind.Regex,
+                Reference: sd.Id.ToString());
+            var c = StepMatcher.Compile(binding);
+            if (c is not null) compiled.Add(c);
+        }
+
+        var result = StepMatcher.Match(new ScenarioStepInput(ParseStepKeyword(Arg(args, "keyword")), text), compiled);
+
+        var sdById = _doc.StepDefinitions.ToDictionary(s => s.Id);
+        var matches = result.Matches
+            .Select(m => int.TryParse(m.Binding.Reference, out var id) && sdById.TryGetValue(id, out var sd) ? (sd, m.Parameters) : default)
+            .Where(x => x.sd is not null)
+            // A method decorated with e.g. [Given]+[When] yields several bindings for the SAME reusable
+            // step at one location — collapse them so it reads as one step, not a false 'ambiguous'.
+            .GroupBy(x => (x.sd!.FilePath, x.sd.LineStart, x.sd.Expression))
+            .Select(g => g.First())
+            .Select(x => new
+            {
+                expression = x.sd!.Expression,
+                expressionKind = x.sd.ExpressionKind,
+                keyword = x.sd.Keyword,
+                capturedArguments = x.Parameters,
+                methodParameters = x.sd.Parameters,
+                @class = _doc.Classes.FirstOrDefault(c => c.Id == x.sd.ClassId)?.Name,
+                method = _doc.Methods.FirstOrDefault(mm => mm.Id == x.sd.MethodId)?.Name,
+                location = $"{x.sd.FilePath}:{x.sd.LineStart}",
+            })
+            .ToList();
+
+        // Classify by distinct reusable steps: none / exact (reuse it) / ambiguous (a conflict to fix).
+        var status = matches.Count switch { 0 => "none", 1 => "exact", _ => "ambiguous" };
+
+        // Nothing binds → rank existing step defs by how many of the phrase's salient tokens they share
+        // (an OR, not an all-tokens AND) so a near-miss that swaps a word still surfaces the closest
+        // steps to adapt — reuse-first. Empty only when nothing is lexically close; then author anew.
+        object? suggestions = null;
+        if (matches.Count == 0)
+        {
+            var score = new Dictionary<int, int>();
+            foreach (var tok in SalientTokens(text!))
+                foreach (var id in MapReader.SearchSteps(_dbPath, tok))
+                    score[(int)id] = score.TryGetValue((int)id, out var n) ? n + 1 : 1;
+
+            suggestions = score.OrderByDescending(kv => kv.Value)
+                .Select(kv => sdById.TryGetValue(kv.Key, out var s) ? s : null)
+                .Where(s => s is not null).Take(10)
+                .Select(s => new { expression = s!.Expression, keyword = s.Keyword, location = $"{s.FilePath}:{s.LineStart}", sharedTerms = score[s.Id] });
+        }
+
+        return Serialize(new { status, text, matchCount = matches.Count, matches, suggestions });
+    }
+
+    private string GetScenario(JsonElement args)
+    {
+        var name = Arg(args, "name");
+        if (string.IsNullOrWhiteSpace(name)) return Serialize(new { error = "get_scenario requires 'name'." });
+        var limit = LimitArg(args, 10);
+
+        var featureById = _doc.Features.ToDictionary(f => f.Id);
+        var stepsByScenario = _doc.ScenarioSteps.GroupBy(s => s.ScenarioId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(x => x.Ordinal).ToList());
+
+        var matches = _doc.Scenarios
+            .Where(s => s.Name.Contains(name, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(s => s.FilePath, StringComparer.Ordinal).ThenBy(s => s.LineStart)
+            .Take(limit)
+            .Select(s => new
+            {
+                scenario = s.Name,
+                feature = featureById.TryGetValue(s.FeatureId, out var f) ? f.Name : null,
+                kind = s.Kind,
+                tags = string.IsNullOrEmpty(s.Tags) ? null : s.Tags,
+                exampleRowCount = s.ExampleRowCount,
+                location = $"{s.FilePath}:{s.LineStart}",
+                steps = (stepsByScenario.TryGetValue(s.Id, out var st) ? st : new List<ScenarioStepRow>())
+                    .Select(x => new { keyword = x.Keyword, text = x.Text, hasDocString = x.HasDocString, hasDataTable = x.HasDataTable }),
+            })
+            .ToList();
+
+        return Serialize(new { count = matches.Count, scenarios = matches });
+    }
+
+    private string GetStepDefinition(JsonElement args)
+    {
+        var query = Arg(args, "query");
+        if (string.IsNullOrWhiteSpace(query)) return Serialize(new { error = "get_step_definition requires 'query'." });
+        var limit = LimitArg(args, 20);
+
+        // step_definition id -> the scenario names that bind it (via binds_to edges: scenario_step -> step_definition).
+        var scenarioByStep = _doc.ScenarioSteps.ToDictionary(s => s.Id, s => s.ScenarioId);
+        var scenarioNameById = _doc.Scenarios.ToDictionary(s => s.Id, s => s.Name);
+        var scenariosByDef = _doc.Edges
+            .Where(e => e.EdgeKind == EdgeKinds.BindsTo && e.ToKind == RefKinds.StepDefinition && e.ToId is not null)
+            .GroupBy(e => e.ToId!.Value)
+            .ToDictionary(g => g.Key, g => g
+                .Select(e => scenarioByStep.TryGetValue(e.FromId, out var sc) ? sc : (int?)null)
+                .Where(x => x is not null).Select(x => x!.Value).Distinct().ToList());
+
+        var matches = _doc.StepDefinitions
+            .Where(s => s.Expression.Contains(query, StringComparison.OrdinalIgnoreCase))
+            .Take(limit)
+            .Select(s =>
+            {
+                var scenarioIds = scenariosByDef.TryGetValue(s.Id, out var l) ? l : new List<int>();
+                var method = _doc.Methods.FirstOrDefault(m => m.Id == s.MethodId);
+                return new
+                {
+                    expression = s.Expression,
+                    keyword = s.Keyword,
+                    expressionKind = s.ExpressionKind,
+                    methodParameters = s.Parameters,
+                    @class = _doc.Classes.FirstOrDefault(c => c.Id == s.ClassId)?.Name,
+                    method = method?.Name,
+                    signature = method?.Signature,
+                    location = $"{s.FilePath}:{s.LineStart}",
+                    usageCount = scenarioIds.Count,
+                    usedByScenarios = scenarioIds.Select(id => scenarioNameById.TryGetValue(id, out var n) ? n : null)
+                        .Where(n => n is not null).Take(25),
+                };
+            })
+            .ToList();
+
+        return Serialize(new { count = matches.Count, stepDefinitions = matches });
+    }
+
+    private string ListTags(JsonElement args)
+    {
+        var limit = LimitArg(args, MaxRows);
+        // Scenario tags are own + inherited (the model already folds in feature tags), so counting
+        // scenarios per tag gives the true reach without double-counting the feature.
+        var counts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var s in _doc.Scenarios)
+        {
+            if (string.IsNullOrWhiteSpace(s.Tags)) continue;
+            foreach (var tag in s.Tags.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries))
+                counts[tag] = counts.TryGetValue(tag, out var n) ? n + 1 : 1;
+        }
+
+        var rows = counts.OrderByDescending(kv => kv.Value).ThenBy(kv => kv.Key, StringComparer.Ordinal)
+            .Take(limit).Select(kv => new { tag = kv.Key, scenarios = kv.Value });
+        return Serialize(new { total = counts.Count, tags = rows });
+    }
+
+    private string StepCatalog(JsonElement args)
+    {
+        var limit = LimitArg(args, 100);
+        var keyword = Arg(args, "keyword");
+        var query = Arg(args, "query");
+
+        var q = _doc.StepDefinitions.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(keyword))
+            q = q.Where(s => string.Equals(s.Keyword, keyword, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrWhiteSpace(query))
+            q = q.Where(s => s.Expression.Contains(query, StringComparison.OrdinalIgnoreCase));
+
+        var all = q.ToList();
+        var rows = all.Take(limit).Select(s => new
+        {
+            expression = s.Expression,
+            keyword = s.Keyword,
+            expressionKind = s.ExpressionKind,
+            methodParameters = s.Parameters,
+            placeholders = ExtractPlaceholders(s.Expression, s.ExpressionKind),
+            @class = _doc.Classes.FirstOrDefault(c => c.Id == s.ClassId)?.Name,
+            location = $"{s.FilePath}:{s.LineStart}",
+        });
+        return Serialize(new { total = all.Count, count = Math.Min(all.Count, limit), steps = rows });
+    }
+
+    private string ProjectDependencies(JsonElement args)
+    {
+        var filter = Arg(args, "project");
+        var limit = LimitArg(args, MaxRows);
+
+        // Resolve each edge endpoint to its owning project, then aggregate cross-project edges into a
+        // weighted project graph — the same derivation the CLI `map` (ProjectMapBuilder) uses.
+        var stepProj = _doc.ScenarioSteps.ToDictionary(s => s.Id, s => s.ProjectId);
+        var stepDefProj = _doc.StepDefinitions.ToDictionary(s => s.Id, s => s.ProjectId);
+        var methodProj = _doc.Methods.ToDictionary(m => m.Id, m => m.ProjectId);
+        var classProj = _doc.Classes.ToDictionary(c => c.Id, c => c.ProjectId);
+        int? ProjectOf(string kind, int? id) => id is not int i ? null : kind switch
+        {
+            RefKinds.ScenarioStep => stepProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.StepDefinition => stepDefProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.Method => methodProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.Class => classProj.TryGetValue(i, out var p) ? p : null,
+            RefKinds.Project => i,
+            _ => null,
+        };
+
+        var weight = new Dictionary<(int From, int To), int>();
+        foreach (var e in _doc.Edges)
+        {
+            if (e.EdgeKind == EdgeKinds.Unbound) continue;
+            if (ProjectOf(e.FromKind, e.FromId) is not int a || ProjectOf(e.ToKind, e.ToId) is not int b || a == b) continue;
+            weight[(a, b)] = weight.TryGetValue((a, b), out var w) ? w + 1 : 1;
+        }
+
+        var nameById = _doc.Projects.ToDictionary(p => p.Id, p => p.Name);
+        var projects = _doc.Projects.AsEnumerable();
+        if (!string.IsNullOrWhiteSpace(filter))
+            projects = projects.Where(p => p.Name.Contains(filter, StringComparison.OrdinalIgnoreCase));
+
+        var rows = projects.OrderBy(p => p.Name, StringComparer.Ordinal).Take(limit).Select(p => new
+        {
+            project = p.Name,
+            dependsOn = weight.Where(kv => kv.Key.From == p.Id).OrderByDescending(kv => kv.Value)
+                .Select(kv => new { project = nameById.TryGetValue(kv.Key.To, out var n) ? n : null, edges = kv.Value }),
+            dependedOnBy = weight.Where(kv => kv.Key.To == p.Id).OrderByDescending(kv => kv.Value)
+                .Select(kv => new { project = nameById.TryGetValue(kv.Key.From, out var n) ? n : null, edges = kv.Value }),
+        }).ToList();
+
+        return Serialize(new { count = rows.Count, projects = rows });
+    }
+
+    /// <summary>
+    /// Best-effort extraction of a step expression's parameters: cucumber <c>{type}</c> placeholders,
+    /// regex alternation groups <c>(a|b|c)</c> as enum values, and any other capture group as a free
+    /// parameter. Degrades to an empty list rather than throwing on anything it doesn't recognise.
+    /// </summary>
+    private static IReadOnlyList<object> ExtractPlaceholders(string? expression, string expressionKind)
+    {
+        var list = new List<object>();
+        if (string.IsNullOrEmpty(expression)) return list;
+
+        if (expressionKind == ExpressionKinds.CucumberExpression)
+        {
+            foreach (Match m in Regex.Matches(expression, @"\{([^}]*)\}"))
+            {
+                var type = m.Groups[1].Value;
+                list.Add(new { kind = "typed", type = string.IsNullOrEmpty(type) ? "any" : type });
+            }
+            return list;
+        }
+
+        // regex: scan non-nested capture groups.
+        foreach (Match m in Regex.Matches(expression, @"\(([^()]*)\)"))
+        {
+            var inner = m.Groups[1].Value;
+            if (inner.StartsWith("?:", StringComparison.Ordinal)) inner = inner.Substring(2);
+            if (inner.Length == 0) continue;
+            var alts = inner.Split('|');
+            if (alts.Length > 1 && alts.All(a => a.Length > 0 && Regex.IsMatch(a, @"^[\w .\-]+$")))
+                list.Add(new { kind = "enum", values = alts });
+            else
+                list.Add(new { kind = "free", pattern = "(" + inner + ")" });
+        }
+        return list;
+    }
+
+    private static BindingKeyword ParseBindingKeyword(string? k) => (k ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "given" => BindingKeyword.Given,
+        "when" => BindingKeyword.When,
+        "then" => BindingKeyword.Then,
+        _ => BindingKeyword.StepDefinition,
+    };
+
+    private static StepKeyword ParseStepKeyword(string? k) => (k ?? string.Empty).Trim().ToLowerInvariant() switch
+    {
+        "when" => StepKeyword.When,
+        "then" => StepKeyword.Then,
+        _ => StepKeyword.Given,
+    };
+
+    private static int LimitArg(JsonElement args, int def)
+        => args.ValueKind == JsonValueKind.Object && args.TryGetProperty("limit", out var l) && l.ValueKind == JsonValueKind.Number
+            ? Math.Clamp(l.GetInt32(), 1, MaxRows) : def;
+
+    /// <summary>Distinct alphanumeric tokens (length &gt; 2) from a phrase — the terms worth OR-searching for near-matches.</summary>
+    private static IEnumerable<string> SalientTokens(string text)
+        => (text ?? string.Empty)
+            .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)
+            .Select(t => new string(t.Where(char.IsLetterOrDigit).ToArray()))
+            .Where(t => t.Length > 2)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
 
     // ---- JSON-RPC plumbing -------------------------------------------------------------------------
 
