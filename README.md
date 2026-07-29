@@ -243,6 +243,12 @@ folder that holds your `codemap.db` and it's picked up automatically; otherwise 
 final arg. In Visual Studio you can also use **Tools picker → `+` → Add custom MCP server** to write
 this entry for you.
 
+> [!NOTE]
+> `dnx` ships with the **.NET 10 SDK**. If you're on **.NET 8/9** (no `dnx` command), install the
+> tool instead — `dotnet tool install --global TestAtlas.Mcp` — and change the config above to
+> `"command": "testatlas-mcp"` with no `args`. (This is also what NuGet's auto-generated snippet
+> uses `dnx` for, so swap it the same way there.)
+
 **Claude Code** — install the global tool and register it:
 
 ```bash
