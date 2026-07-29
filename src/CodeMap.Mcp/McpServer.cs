@@ -148,13 +148,6 @@ public sealed class McpServer
             },
             ResolveStep),
 
-        new("unbound_steps",
-            "Scenario steps that match NO step definition (unbound) — the glue an agent must implement before those scenarios can run. " +
-            "Each row: the step text, its keyword, the owning scenario + feature, and file:line. Use this to see exactly what step " +
-            "definitions are missing across the suite.",
-            new { type = "object", properties = new { limit = new { type = "integer", description = "Max rows (default 50)." } } },
-            UnboundSteps),
-
         new("get_scenario",
             "Full detail of scenario(s) whose name contains the given text: feature, tags, kind, example-row count, file:line, " +
             "and the ordered steps (keyword + text + doc-string/data-table flags). Use to read an existing scenario before writing a similar one.",
@@ -206,12 +199,6 @@ public sealed class McpServer
                 },
             },
             StepCatalog),
-
-        new("coverage_gaps",
-            "Where the suite has holes: HTTP endpoints with zero scenario reach (untested), and step definitions that no scenario binds " +
-            "(dead glue). Use to decide what to automate next, or to prune. Counts are exact; lists are capped by 'limit'.",
-            new { type = "object", properties = new { limit = new { type = "integer", description = "Max rows per category (default 50)." } } },
-            CoverageGaps),
 
         new("project_dependencies",
             "The project dependency graph the suite implies: for each project, which projects it depends on and which depend on it, " +
@@ -400,37 +387,6 @@ public sealed class McpServer
         return Serialize(new { status, text, matchCount = matches.Count, matches, suggestions });
     }
 
-    private string UnboundSteps(JsonElement args)
-    {
-        var limit = LimitArg(args, 50);
-        var unboundIds = _doc.Edges
-            .Where(e => e.EdgeKind == EdgeKinds.Unbound && e.FromKind == RefKinds.ScenarioStep)
-            .Select(e => e.FromId).ToHashSet();
-
-        var scenarioById = _doc.Scenarios.ToDictionary(s => s.Id);
-        var featureById = _doc.Features.ToDictionary(f => f.Id);
-
-        var all = _doc.ScenarioSteps.Where(s => unboundIds.Contains(s.Id))
-            .OrderBy(s => s.FilePath, StringComparer.Ordinal).ThenBy(s => s.LineStart)
-            .ToList();
-
-        var rows = all.Take(limit).Select(st =>
-        {
-            var sc = scenarioById.TryGetValue(st.ScenarioId, out var s) ? s : null;
-            var feature = sc is not null && featureById.TryGetValue(sc.FeatureId, out var f) ? f.Name : null;
-            return new
-            {
-                step = st.Text,
-                keyword = st.Keyword,
-                scenario = sc?.Name,
-                feature,
-                location = $"{st.FilePath}:{st.LineStart}",
-            };
-        });
-
-        return Serialize(new { count = all.Count, truncated = all.Count > limit ? all.Count - limit : 0, steps = rows });
-    }
-
     private string GetScenario(JsonElement args)
     {
         var name = Arg(args, "name");
@@ -546,38 +502,6 @@ public sealed class McpServer
             location = $"{s.FilePath}:{s.LineStart}",
         });
         return Serialize(new { total = all.Count, count = Math.Min(all.Count, limit), steps = rows });
-    }
-
-    private string CoverageGaps(JsonElement args)
-    {
-        var limit = LimitArg(args, 50);
-
-        var reach = ImpactAnalyzer.EndpointReachAll(_doc);
-        bool Untested(EndpointRow e) => !(reach.TryGetValue(e.Id, out var r) && r.ScenarioIds.Count > 0);
-        var untested = _doc.Endpoints.Where(Untested).OrderBy(e => e.Route, StringComparer.Ordinal).ToList();
-
-        var boundDefIds = _doc.Edges
-            .Where(e => e.EdgeKind == EdgeKinds.BindsTo && e.ToKind == RefKinds.StepDefinition && e.ToId is not null)
-            .Select(e => e.ToId!.Value).ToHashSet();
-        var unused = _doc.StepDefinitions.Where(s => !boundDefIds.Contains(s.Id)).ToList();
-
-        return Serialize(new
-        {
-            // Denominators so a clean zero is unambiguous: "0 of 0" means the map indexed no endpoints
-            // (e.g. a pre-v4 map), NOT that everything is covered — distinct from "0 of 50".
-            totalEndpoints = _doc.Endpoints.Count,
-            untestedEndpointCount = untested.Count,
-            untestedEndpoints = untested.Take(limit).Select(e => new { verb = e.Verb, route = e.Path ?? e.Route }),
-            totalStepDefinitions = _doc.StepDefinitions.Count,
-            unusedStepDefinitionCount = unused.Count,
-            unusedStepDefinitions = unused.Take(limit).Select(s => new
-            {
-                expression = s.Expression,
-                keyword = s.Keyword,
-                @class = _doc.Classes.FirstOrDefault(c => c.Id == s.ClassId)?.Name,
-                location = $"{s.FilePath}:{s.LineStart}",
-            }),
-        });
     }
 
     private string ProjectDependencies(JsonElement args)

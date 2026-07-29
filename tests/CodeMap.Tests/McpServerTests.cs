@@ -102,8 +102,8 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
             .Select(t => t.GetProperty("name").GetString()).ToHashSet();
         Assert.Superset(new HashSet<string?>
         {
-            "resolve_step", "unbound_steps", "get_scenario", "get_step_definition",
-            "step_catalog", "coverage_gaps", "list_tags", "project_dependencies",
+            "resolve_step", "get_scenario", "get_step_definition",
+            "step_catalog", "list_tags", "project_dependencies",
         }, names);
     }
 
@@ -143,8 +143,8 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
     [Fact]
     public void Resolve_step_returns_none_when_nothing_binds()
     {
-        // "pigs can fly" is the fixture's deliberately-unbound step — no definition matches.
-        var r = ToolCall("resolve_step", """{"text":"pigs can fly"}""");
+        // "the astronaut plants a flag" is not defined anywhere — no definition matches.
+        var r = ToolCall("resolve_step", """{"text":"the astronaut plants a flag"}""");
         Assert.Equal("none", r.GetProperty("status").GetString());
         Assert.Equal(0, r.GetProperty("matchCount").GetInt32());
     }
@@ -158,18 +158,6 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
         Assert.Equal("none", r.GetProperty("status").GetString());
         var suggested = r.GetProperty("suggestions").EnumerateArray().Select(s => s.GetProperty("expression").GetString());
         Assert.Contains("the customer checks out", suggested);
-    }
-
-    [Fact]
-    public void Unbound_steps_lists_the_deliberately_unbound_step()
-    {
-        var r = ToolCall("unbound_steps");
-        Assert.True(r.GetProperty("count").GetInt32() >= 1);
-        var texts = r.GetProperty("steps").EnumerateArray().Select(s => s.GetProperty("step").GetString());
-        Assert.Contains("pigs can fly", texts);
-        var pig = r.GetProperty("steps").EnumerateArray().Single(s => s.GetProperty("step").GetString() == "pigs can fly");
-        Assert.Equal("Successful sign in", pig.GetProperty("scenario").GetString());
-        Assert.Equal("Login", pig.GetProperty("feature").GetString());
     }
 
     [Fact]
@@ -238,17 +226,6 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
             .Single(p => p.GetProperty("kind").GetString() == "enum");
         var values = enumPh.GetProperty("values").EnumerateArray().Select(v => v.GetString()).ToList();
         Assert.Equal(new[] { "Auto", "Allianz", "AllianzVoe" }, values);
-    }
-
-    [Fact]
-    public void Coverage_gaps_reports_consistent_counts_and_lists()
-    {
-        var r = ToolCall("coverage_gaps");
-        // Counts are exact; the returned lists are capped but consistent when under the cap.
-        Assert.True(r.GetProperty("untestedEndpointCount").GetInt32() >= 0);
-        Assert.True(r.GetProperty("unusedStepDefinitionCount").GetInt32() >= 0);
-        Assert.True(r.GetProperty("untestedEndpoints").GetArrayLength() <= r.GetProperty("untestedEndpointCount").GetInt32());
-        Assert.True(r.GetProperty("unusedStepDefinitions").GetArrayLength() <= r.GetProperty("unusedStepDefinitionCount").GetInt32());
     }
 
     [Fact]
