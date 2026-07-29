@@ -6,9 +6,9 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 
 | Channel | Identifier | Status |
 | --- | --- | --- |
-| NuGet — server | [`TestAtlas.Mcp`](https://www.nuget.org/packages/TestAtlas.Mcp) | v0.1.5 |
-| NuGet — CLI | [`TestAtlas.Cli`](https://www.nuget.org/packages/TestAtlas.Cli) | v0.1.5 |
-| Official MCP Registry | `io.github.Karzone/TestAtlas.Mcp` | v0.1.5, active |
+| NuGet — server | [`TestAtlas.Mcp`](https://www.nuget.org/packages/TestAtlas.Mcp) | v0.1.6 |
+| NuGet — CLI | [`TestAtlas.Cli`](https://www.nuget.org/packages/TestAtlas.Cli) | v0.1.6 |
+| Official MCP Registry | `io.github.Karzone/TestAtlas.Mcp` | v0.1.6, active |
 
 ## Pending submissions
 
@@ -20,5 +20,6 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 ## Notes
 
 - The Official MCP Registry is the source of truth; the GitHub MCP Registry is a **separate curated** gallery and does not auto-ingest Official Registry entries — hence the manual nomination above.
-- Until the gallery listing lands, add the server in VS / VS Code manually via `.mcp.json`:
-  `{ "servers": { "testatlas": { "type": "stdio", "command": "testatlas-mcp" } } }`
+- Until the gallery listing lands, add the server in VS / VS Code manually via `.mcp.json` (pass the
+  map path explicitly — the bare command exits `code 2` when the agent's working dir has no `codemap.db`):
+  `{ "servers": { "testatlas": { "type": "stdio", "command": "testatlas-mcp", "args": ["C:\\path\\to\\codemap.db"] } } }`
