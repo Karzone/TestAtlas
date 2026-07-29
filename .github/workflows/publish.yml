@@ -48,7 +48,7 @@ jobs:
         run: |
           $version = ([regex]::Match((Get-Content src/Directory.Build.props -Raw), '<Version>(.*?)</Version>').Groups[1].Value).ToLowerInvariant()
           $url = "https://api.nuget.org/v3-flatcontainer/testatlas.mcp/$version/readme"
-          $elapsed = 0; $interval = 10; $timeout = 300
+          $elapsed = 0; $interval = 15; $timeout = 900   # MCP-type packages validate slower than plain tools
           Write-Host "Waiting for TestAtlas.Mcp $version on NuGet ($url) ..."
           while ($true) {
             if ($elapsed -gt $timeout) { Write-Error "Package README not available after $elapsed s."; exit 1 }
