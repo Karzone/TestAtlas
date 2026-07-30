@@ -314,10 +314,13 @@ with how much changed:
 
 - **Locally** — `python scripts/check-map-age.py` tells you when your map drifted; a
   version-controlled `post-merge` git hook can warn automatically after every pull.
-- **In CI** — re-index on every merge to main and publish the `.db` as a build artifact.
+- **In CI (team model)** — re-index on every merge to main and publish the `.db` to a shared feed
+  (never commit it — it's a build artifact). Then teammates and agents only need **`TestAtlas.Mcp`**
+  locally: download the shared map and point `TESTATLAS_DB` at it — no local `TestAtlas.Cli` or
+  indexing required. (Index locally only to include your own *uncommitted* branch work.)
 
-Details — the staleness checker, the git hook, and copy-paste CI recipes for GitHub Actions /
-Azure DevOps — in **[docs/keeping-the-map-fresh.md](docs/keeping-the-map-fresh.md)**.
+Details — the staleness checker, the git hook, and copy-paste CI recipes (GitHub Actions +
+Azure DevOps with a Universal feed) — in **[docs/keeping-the-map-fresh.md](docs/keeping-the-map-fresh.md)**.
 
 ---
 
