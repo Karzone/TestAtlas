@@ -356,7 +356,7 @@ packages are **TestAtlas**. Full specs: [`specs/codemap-indexer.md`](specs/codem
 
 ---
 
-## 🗺️ Roadmap
+## 🗺 Roadmap
 
 - [x] **Indexer CLI** — C# indexer + documented, versioned SQLite schema
 - [x] **HTML visualization** — self-contained report + project map generated from the db
