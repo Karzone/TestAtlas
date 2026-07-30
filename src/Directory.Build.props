@@ -6,7 +6,7 @@
     Per-package <Description> lives in each project's own .csproj.
   -->
   <PropertyGroup>
-    <Version>0.1.8</Version>
+    <Version>0.1.9</Version>
     <Authors>Karthik Kalaiyarasu</Authors>
     <Company>Karthik Kalaiyarasu</Company>
     <Copyright>Copyright (c) 2026 Karthik Kalaiyarasu</Copyright>
@@ -18,13 +18,15 @@
     <PublishRepositoryUrl>true</PublishRepositoryUrl>
 
     <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageIcon>logo-mark.png</PackageIcon>
     <PackageTags>dotnet;testing;test-automation;reqnroll;specflow;gherkin;bdd;roslyn;static-analysis;mcp;sqlite;codemap</PackageTags>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 
-  <!-- Embed the repo-root README into every package (path is absolute, so it resolves from any project under src/). -->
+  <!-- Embed the repo-root README and logo into every package (paths are absolute, so they resolve from any project under src/). -->
   <ItemGroup>
     <None Include="$(MSBuildThisFileDirectory)..\README.md" Pack="true" PackagePath="\" Visible="false" />
+    <None Include="$(MSBuildThisFileDirectory)..\assets\logo-mark.png" Pack="true" PackagePath="\" Visible="false" />
   </ItemGroup>
 
 </Project>

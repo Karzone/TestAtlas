@@ -6,9 +6,9 @@
   "version": "0.0.0-dev",
   "icons": [
     {
-      "src": "https://raw.githubusercontent.com/Karzone/TestAtlas/main/assets/logo-mark.svg",
-      "mimeType": "image/svg+xml",
-      "sizes": ["any"]
+      "src": "https://raw.githubusercontent.com/Karzone/TestAtlas/main/assets/logo-mark.png",
+      "mimeType": "image/png",
+      "sizes": ["256x256"]
     }
   ],
   "repository": {
