@@ -324,6 +324,23 @@ Azure DevOps with a Universal feed) — in **[docs/keeping-the-map-fresh.md](doc
 
 ---
 
+## 🧹 Uninstall
+
+Two separate things — remove them in this order, so the editor isn't launching a server whose binary just vanished:
+
+1. **Remove the MCP registration** — delete the `testatlas` block from your `.mcp.json`
+   (`<SolutionDir>\.mcp.json` or `%USERPROFILE%\.mcp.json`), then restart Visual Studio / VS Code.
+   (Or just toggle it off in the agent's tools/wrench picker to keep it for later.)
+2. **Uninstall the tools** — they're .NET global tools, not editor add-ins:
+   ```bash
+   dotnet tool uninstall --global TestAtlas.Mcp
+   dotnet tool uninstall --global TestAtlas.Cli
+   dotnet tool list --global            # confirm they're gone
+   ```
+3. **(Optional)** delete the `codemap.db` map file — it's just data, nothing else references it.
+
+---
+
 ## 🎯 Design tenets
 
 - **Zero config** — a useful map on an unseen solution, no config file required.
