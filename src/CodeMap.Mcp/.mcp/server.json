@@ -1,8 +1,16 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-10-17/server.schema.json",
   "name": "io.github.Karzone/TestAtlas.Mcp",
+  "title": "TestAtlas",
   "description": "Semantic map of a .NET test-automation solution for AI agents — search, impact, endpoints",
   "version": "0.0.0-dev",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/Karzone/TestAtlas/main/assets/logo-mark.svg",
+      "mimeType": "image/svg+xml",
+      "sizes": ["any"]
+    }
+  ],
   "repository": {
     "url": "https://github.com/Karzone/TestAtlas",
     "source": "github"
