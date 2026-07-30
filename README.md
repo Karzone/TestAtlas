@@ -26,8 +26,8 @@
 </p>
 
 <p align="center">
-  <a href="#why">Why</a> ·
-  <a href="#see-it">See it</a> ·
+  <a href="#the-problem">The problem</a> ·
+  <a href="#see-it-in-action">See it in action</a> ·
   <a href="#-quick-start">Quick start</a> ·
   <a href="#-use-it-from-an-ai-agent-mcp">MCP</a> ·
   <a href="#-commands">Commands</a> ·
@@ -37,7 +37,7 @@
 
 ---
 
-## Why
+## The problem
 
 Large test-automation solutions are hard to navigate — for humans *and* for AI agents. Asked to
 automate a new story, an agent can't see which steps already exist, where similar code lives, or
@@ -47,7 +47,7 @@ deterministically, offline, without a model or a network call.
 
 ---
 
-## See it
+## See it in action
 
 Index the bundled 8-project sample once — `testatlas index samples/SampleShop/SampleShop.sln` — then
 ask it questions from the terminal. Every number below is real output from that run:
