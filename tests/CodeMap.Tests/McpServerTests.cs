@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using TestAtlas.Core.Storage;
 using TestAtlas.Mcp;
@@ -36,6 +37,10 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
         var result = res.GetProperty("result");
         Assert.False(string.IsNullOrEmpty(result.GetProperty("protocolVersion").GetString()));
         Assert.Equal("testatlas", result.GetProperty("serverInfo").GetProperty("name").GetString());
+        // The reported version tracks the package version, so it can't drift back to a hardcoded literal.
+        var expected = typeof(McpServer).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Split('+')[0];
+        Assert.Equal(expected, result.GetProperty("serverInfo").GetProperty("version").GetString());
         Assert.True(result.GetProperty("capabilities").TryGetProperty("tools", out _));
     }
 

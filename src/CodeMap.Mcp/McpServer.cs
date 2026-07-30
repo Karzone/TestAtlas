@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using TestAtlas.Core.Analysis;
@@ -20,7 +21,13 @@ public sealed class McpServer
 {
     private const string ProtocolVersion = "2024-11-05";
     private const string ServerName = "testatlas";
-    private const string ServerVersion = "2.0.0";
+    // Read from the assembly so it tracks <Version> in Directory.Build.props instead of drifting.
+    // SourceLink appends "+<commit sha>" to the informational version — trim it back to the package version.
+    private static readonly string ServerVersion =
+        typeof(McpServer).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()
+            ?.InformationalVersion.Split('+')[0]
+        ?? typeof(McpServer).Assembly.GetName().Version?.ToString(3)
+        ?? "0.0.0";
     private const int MaxRows = 200; // cap any list response so a huge map can't flood the agent
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };

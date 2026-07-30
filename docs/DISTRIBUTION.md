@@ -6,9 +6,9 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 
 | Channel | Identifier | Status |
 | --- | --- | --- |
-| NuGet — server | [`TestAtlas.Mcp`](https://www.nuget.org/packages/TestAtlas.Mcp) | v0.1.9 |
-| NuGet — CLI | [`TestAtlas.Cli`](https://www.nuget.org/packages/TestAtlas.Cli) | v0.1.9 |
-| Official MCP Registry | `io.github.Karzone/TestAtlas.Mcp` | v0.1.9, active |
+| NuGet — server | [`TestAtlas.Mcp`](https://www.nuget.org/packages/TestAtlas.Mcp) | v0.1.10 |
+| NuGet — CLI | [`TestAtlas.Cli`](https://www.nuget.org/packages/TestAtlas.Cli) | v0.1.10 |
+| Official MCP Registry | `io.github.Karzone/TestAtlas.Mcp` | v0.1.10, active |
 | GitHub MCP Registry (VS Code / Visual Studio *Browse* gallery) | Karzone Test Atlas | Listed 2026-07-30 (ticket #152789 approved); one-click Install live |
 
 ## Articles & posts
