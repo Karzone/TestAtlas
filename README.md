@@ -1,6 +1,6 @@
 <!-- mcp-name: io.github.Karzone/TestAtlas.Mcp -->
 <h1 align="center">
-  <img src="assets/logo-mark.svg" width="40" height="40" alt="" valign="middle">
+  <img src="https://raw.githubusercontent.com/Karzone/TestAtlas/main/assets/logo-mark.svg" width="40" height="40" alt="" valign="middle">
   &nbsp;TestAtlas
 </h1>
 
@@ -49,14 +49,8 @@ deterministically, offline, without a model or a network call.
 
 ## See it
 
-One command over the bundled 8-project sample (`testatlas index samples/SampleShop/SampleShop.sln`),
-then `testatlas report` — every number below is real output:
-
-<p align="center">
-  <a href="https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-report.html"><img alt="TestAtlas HTML report for SampleShop.sln — entity counts, 100% step-binding coverage, class kinds" src="assets/sample-report.png" width="820"></a>
-</p>
-
-Ask it questions from the terminal:
+Index the bundled 8-project sample once — `testatlas index samples/SampleShop/SampleShop.sln` — then
+ask it questions from the terminal. Every number below is real output from that run:
 
 ```console
 $ testatlas stats sampleshop.db
