@@ -31,12 +31,13 @@ The `<clear />` drops every inherited source (including the private feed), so `d
 nuget.org. It's a one-off override — it doesn't change your machine's NuGet configuration or affect
 the private feed for your other projects.
 
-## The MCP server exits with `code 2` at startup
+## Every tool answers "TestAtlas has no map loaded" (or, before 0.1.11, the server exits with `code 2`)
 
 The server needs a map. It resolves one in this order: a **path argument**, the `TESTATLAS_DB`
 environment variable, or a `codemap.db`/`atlas.db` in the current working directory. Most agents
 launch the server from **their own** working directory — not your solution folder — so
-auto-discovery finds nothing and the server exits with `code 2`.
+auto-discovery finds nothing. From 0.1.11 the server still starts, lists its tools, and answers every
+call with that error so the agent can relay it; earlier releases exit with `code 2` instead.
 
 **Fix: pass the map path explicitly** as the last argument in your `.mcp.json` /
 `claude mcp add` registration (double-backslash it on Windows), or set `TESTATLAS_DB`.
@@ -49,7 +50,7 @@ workspace index, unrelated to TestAtlas) proves nothing. Check these signals ins
 
 1. **Is the server connected?** Open the **tools/wrench menu** in the chat input — `testatlas` and
    its tools (`stats`, `impact`, `resolve_step`, …) should be listed and enabled. If they're
-   missing, the server didn't start — see the `code 2` fix above.
+   missing, the server didn't start — see the no-map fix above.
 2. **Force a call with a ground-truth question** (in your agent's **Agent** mode, not a plain
    chat/ask mode — only agent mode invokes tools):
    > `Using #testatlas, call the stats tool — how many classes and methods does <a project in your map> have?`

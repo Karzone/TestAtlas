@@ -45,6 +45,37 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
     }
 
     [Fact]
+    public void A_server_without_a_map_advertises_every_tool_but_refuses_each_call_with_instructions()
+    {
+        // The shape a misconfigured registration produces: the host launched the server from its own working
+        // directory and the configured path is wrong. The server must still hold the connection open and tell
+        // the agent what to do — a crashed process explains nothing to anyone.
+        var bare = McpServer.WithoutMap("C:\\missing\\codemap.db");
+        static JsonElement Parse(string? s) => JsonDocument.Parse(s!).RootElement;
+        static HashSet<string?> Names(JsonElement res) => res.GetProperty("result").GetProperty("tools").EnumerateArray()
+            .Select(t => t.GetProperty("name").GetString()).ToHashSet();
+
+        var init = Parse(bare.HandleLine("""{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"""));
+        Assert.Equal("testatlas", init.GetProperty("result").GetProperty("serverInfo").GetProperty("name").GetString());
+
+        var withMap = Names(Call("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}"""));
+        var withoutMap = Names(Parse(bare.HandleLine("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}""")));
+        Assert.True(withMap.SetEquals(withoutMap), "a map-less server must advertise exactly the tools a served map does");
+
+        var call = Parse(bare.HandleLine("""{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"stats","arguments":{}}}"""));
+        var result = call.GetProperty("result"); // an MCP tool error, not a JSON-RPC error: hosts show it to the model
+        Assert.True(result.GetProperty("isError").GetBoolean());
+        var text = result.GetProperty("content")[0].GetProperty("text").GetString()!;
+        Assert.Contains("C:\\missing\\codemap.db", text);
+        Assert.Contains("testatlas index", text);
+        Assert.Contains("TESTATLAS_DB", text);
+
+        // A request that is malformed regardless of the map stays a protocol error.
+        var unknown = Parse(bare.HandleLine("""{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"nope"}}"""));
+        Assert.True(unknown.TryGetProperty("error", out _));
+    }
+
+    [Fact]
     public void Tools_list_advertises_the_read_only_tools()
     {
         var res = Call("""{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");

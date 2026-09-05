@@ -191,7 +191,8 @@ Prerequisites: **both tools installed and a map built** — steps 1–2 of the
 
 **Pass the map path explicitly** (as above, or via a `TESTATLAS_DB` env var) — most agents launch
 the server from their own working directory, not your solution folder, so relying on auto-discovery
-makes the server exit with `code 2`. In Visual Studio you can also use **Tools picker → `+` → Add
+leaves the server with no map: it starts and lists its tools, but every call answers with an error
+saying how to supply one (releases before 0.1.11 exited with `code 2` instead). In Visual Studio you can also use **Tools picker → `+` → Add
 custom MCP server** to write this entry for you. On the .NET 10 SDK you can skip the install and
 use `"command": "dnx", "args": ["TestAtlas.Mcp", "--yes", "C:\\path\\to\\codemap.db"]` — `dnx`
 fetches and runs the server on demand.

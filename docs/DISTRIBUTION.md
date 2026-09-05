@@ -35,6 +35,6 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 ## Notes
 
 - The Official MCP Registry is the source of truth; the GitHub MCP Registry is a **separate curated** gallery and does not auto-ingest Official Registry entries — it required the manual nomination (ticket #152789), now approved and live in the VS / VS Code *Browse* gallery.
-- Manual install is still possible via `.mcp.json` if needed (pass the map path explicitly — the bare
-  command exits `code 2` when the agent's working dir has no `codemap.db`):
+- Manual install is still possible via `.mcp.json` if needed (pass the map path explicitly — with no
+  `codemap.db` in the agent's working dir the bare command has no map, and every tool call says so):
   `{ "servers": { "testatlas": { "type": "stdio", "command": "testatlas-mcp", "args": ["C:\\path\\to\\codemap.db"] } } }`

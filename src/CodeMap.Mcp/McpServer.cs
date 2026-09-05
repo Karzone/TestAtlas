@@ -32,8 +32,11 @@ public sealed class McpServer
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
+    // Empty for a server without a map (then it is only quoted in NoMapMessage).
     private readonly string _dbPath;
+    // Never dereferenced when !_hasMap: HandleToolCall refuses every call before a handler runs.
     private readonly MapDocument _doc;
+    private readonly bool _hasMap;
     private readonly IReadOnlyList<ToolDef> _tools;
 
     public McpServer(string dbPath) : this(dbPath, MapReader.Read(dbPath)) { }
@@ -43,8 +46,36 @@ public sealed class McpServer
     {
         _dbPath = dbPath;
         _doc = doc;
+        _hasMap = true;
         _tools = BuildTools();
     }
+
+    /// <summary>
+    /// A server with no map. It completes the MCP handshake and advertises every tool, but each call answers
+    /// with <c>isError</c> and the instructions for supplying a map. Most hosts hide a crashed server's
+    /// stderr and show the agent a tool error — so a misconfigured registration explains itself where it is
+    /// seen, instead of dying with exit code 2 in a log nobody opens.
+    /// </summary>
+    /// <param name="attemptedPath">The map path that was configured but does not exist, if any.</param>
+    public static McpServer WithoutMap(string? attemptedPath = null) => new(attemptedPath, noMap: true);
+
+    private McpServer(string? attemptedPath, bool noMap)
+    {
+        _dbPath = attemptedPath ?? string.Empty;
+        _doc = null!;   // guarded by _hasMap
+        _hasMap = !noMap;
+        _tools = BuildTools();
+    }
+
+    /// <summary>Why a call was refused when the server has no map, and what to do about it. Prose: the agent relays it.</summary>
+    private string NoMapMessage() =>
+        "TestAtlas has no map loaded, so this tool cannot answer. " +
+        (_dbPath.Length == 0
+            ? "The server was started without a map path and found no codemap.db in its working directory. "
+            : $"The server was started with map path '{_dbPath}', which does not exist. ") +
+        "Build a map with `testatlas index <path-to-solution.sln>` (writes ./codemap.db), then give its path to " +
+        "testatlas-mcp as the last argument of the MCP server registration or via the TESTATLAS_DB environment " +
+        "variable, and restart the agent session so the server picks it up.";
 
     private sealed record ToolDef(string Name, string Description, object InputSchema, Func<JsonElement, string> Handler);
 
@@ -96,6 +127,11 @@ public sealed class McpServer
 
         var tool = _tools.FirstOrDefault(t => t.Name == name);
         if (tool is null) return Error(id, -32602, $"Unknown tool: {name}");
+
+        // Per MCP, a failure of the tool itself (as opposed to a malformed request) is a result with isError,
+        // which hosts surface to the model; a JSON-RPC error would be swallowed as a transport fault.
+        if (!_hasMap)
+            return Result(id, new { content = new[] { new { type = "text", text = NoMapMessage() } }, isError = true });
 
         var text = tool.Handler(args);
         // Per MCP, a tool result is content blocks; text carries the (JSON) payload the agent parses.
