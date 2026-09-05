@@ -28,7 +28,8 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 
 | Channel | Reference | Status | Notes |
 | --- | --- | --- | --- |
-| awesome-mcp-servers | — | Blocked | Depends on the Glama listing, which failed with an orphaned-duplicate for this repo (resubmitted for review 2026-07-30). |
+| Glama | [glama.ai/mcp/servers/Karzone/TestAtlas](https://glama.ai/mcp/servers/Karzone/TestAtlas) | Listed, not installable | The first submission failed with an orphaned-duplicate record (resubmitted 2026-07-30). The listing now exists (11 tools, A grades) but shows "cannot be installed": no Glama **release**. Frank Fiegel (2026-09-05): claim the server on its page, then add a test profile / build spec at `/admin/dockerfile` and publish a release. The repo `Dockerfile` indexes `samples/SampleShop` so the container starts with a map; `glama.json` names the maintainer. |
+| awesome-mcp-servers | — | Blocked | Depends on the Glama listing being installable (see row above). |
 
 ## Notes
 
