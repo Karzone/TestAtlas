@@ -28,8 +28,8 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 
 | Channel | Reference | Status | Notes |
 | --- | --- | --- | --- |
-| Glama | [glama.ai/mcp/servers/Karzone/TestAtlas](https://glama.ai/mcp/servers/Karzone/TestAtlas) | Listed, not installable | The first submission failed with an orphaned-duplicate record (resubmitted 2026-07-30). The listing now exists (11 tools, A grades) but shows "cannot be installed": no Glama **release**. Frank Fiegel (2026-09-05): claim the server on its page, then add a test profile / build spec at `/admin/dockerfile` and publish a release. The repo `Dockerfile` indexes `samples/SampleShop` so the container starts with a map; `glama.json` names the maintainer. |
-| awesome-mcp-servers | — | Blocked | Depends on the Glama listing being installable (see row above). |
+| Glama | [glama.ai/mcp/servers/Karzone/TestAtlas](https://glama.ai/mcp/servers/Karzone/TestAtlas) | Release 0.1.10 published 2026-09-05 | The first submission failed with an orphaned-duplicate record (resubmitted 2026-07-30); the server was then claimed and a release made. Glama ignores the repo `Dockerfile` and generates its own Debian image from the build spec on `/admin/dockerfile`: build steps install libicu, the .NET 8 SDK (dotnet-install.sh), `TestAtlas.Cli` + `TestAtlas.Mcp` from NuGet, then index `samples/SampleShop` to `/app/codemap.db`; CMD is `/root/.dotnet/tools/testatlas-mcp /app/codemap.db`; no environment variables. A new NuGet version needs a new build + release there. |
+| awesome-mcp-servers | — | Unblocked | Was waiting on an installable Glama listing (see row above); PR can be resubmitted. |
 
 ## Notes
 
