@@ -16,8 +16,13 @@
   <a href="https://www.nuget.org/packages/TestAtlas.Mcp"><img alt="TestAtlas.Mcp on NuGet" src="https://img.shields.io/nuget/v/TestAtlas.Mcp?logo=nuget&label=TestAtlas.Mcp&color=004880"></a>
   <a href="https://www.nuget.org/packages/TestAtlas.Cli"><img alt="TestAtlas.Cli on NuGet" src="https://img.shields.io/nuget/v/TestAtlas.Cli?logo=nuget&label=TestAtlas.Cli&color=004880"></a>
   <img alt="Model Context Protocol — listed" src="https://img.shields.io/badge/MCP_Registry-listed-7C3AED">
+  <a href="https://glama.ai/mcp/servers/Karzone/TestAtlas"><img alt="Glama — listed" src="https://img.shields.io/badge/Glama-listed-1B8F5A"></a>
   <img alt=".NET 8.0" src="https://img.shields.io/badge/.NET-8.0-512BD4?logo=dotnet&logoColor=white">
   <img alt="MIT license" src="https://img.shields.io/badge/license-MIT-blue">
+</p>
+
+<p align="center">
+  <a href="https://glama.ai/mcp/servers/Karzone/TestAtlas"><img width="380" alt="TestAtlas on Glama: license, quality and maintenance grades" src="https://glama.ai/mcp/servers/Karzone/TestAtlas/badge"></a>
 </p>
 
 <p align="center">
