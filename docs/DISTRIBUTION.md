@@ -6,9 +6,9 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 
 | Channel | Identifier | Status |
 | --- | --- | --- |
-| NuGet — server | [`TestAtlas.Mcp`](https://www.nuget.org/packages/TestAtlas.Mcp) | v0.1.10 |
-| NuGet — CLI | [`TestAtlas.Cli`](https://www.nuget.org/packages/TestAtlas.Cli) | v0.1.10 |
-| Official MCP Registry | `io.github.Karzone/TestAtlas.Mcp` | v0.1.10, active |
+| NuGet — server | [`TestAtlas.Mcp`](https://www.nuget.org/packages/TestAtlas.Mcp) | v0.1.11 |
+| NuGet — CLI | [`TestAtlas.Cli`](https://www.nuget.org/packages/TestAtlas.Cli) | v0.1.11 |
+| Official MCP Registry | `io.github.Karzone/TestAtlas.Mcp` | v0.1.11, active |
 | GitHub MCP Registry (VS Code / Visual Studio *Browse* gallery) | Karzone Test Atlas | Listed 2026-07-30 (ticket #152789 approved); one-click Install live |
 
 ## Articles & posts
@@ -28,7 +28,7 @@ Where TestAtlas is published, and the status of pending directory/registry submi
 
 | Channel | Reference | Status | Notes |
 | --- | --- | --- | --- |
-| Glama | [glama.ai/mcp/servers/Karzone/TestAtlas](https://glama.ai/mcp/servers/Karzone/TestAtlas) | Release 0.1.10 published 2026-09-05 | The first submission failed with an orphaned-duplicate record (resubmitted 2026-07-30); the server was then claimed and a release made. Glama ignores the repo `Dockerfile` and generates its own Debian image from the build spec on `/admin/dockerfile`: build steps install libicu, the .NET 8 SDK (dotnet-install.sh), `TestAtlas.Cli` + `TestAtlas.Mcp` from NuGet, then index `samples/SampleShop` to `/app/codemap.db`; CMD is `/root/.dotnet/tools/testatlas-mcp /app/codemap.db`; no environment variables. A new NuGet version needs a new build + release there. |
+| Glama | [glama.ai/mcp/servers/Karzone/TestAtlas](https://glama.ai/mcp/servers/Karzone/TestAtlas) | Release 0.1.10 published 2026-09-05 | The first submission failed with an orphaned-duplicate record (resubmitted 2026-07-30); the server was then claimed and a release made. Glama ignores the repo `Dockerfile` and generates its own Debian image from the build spec on `/admin/dockerfile`: build steps install libicu, the .NET 8 SDK (dotnet-install.sh), `TestAtlas.Cli` + `TestAtlas.Mcp` from NuGet, then index `samples/SampleShop` to `/app/codemap.db`; CMD is `/root/.dotnet/tools/testatlas-mcp /app/codemap.db`; no environment variables. A new NuGet version needs a new build + release there (0.1.11 owed after the NuGet publish). |
 | Claude Code plugin marketplace | `claude plugin marketplace add Karzone/TestAtlas` then `claude plugin install testatlas@testatlas` | In repo, not yet announced | The repo is its own marketplace (`.claude-plugin/marketplace.json`); the plugin is `claude-plugin/` (server with no args + skill + `/testatlas:index` + SessionStart map check). Installing clones the whole repo into the plugin cache. Anthropic's plugin directory submission not done. |
 | awesome-mcp-servers | — | Unblocked | Was waiting on an installable Glama listing (see row above); PR can be resubmitted. |
 

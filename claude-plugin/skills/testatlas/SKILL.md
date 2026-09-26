@@ -10,8 +10,8 @@ The `testatlas` MCP server serves a semantic map of the solution at the project 
 call here changes the code, the map or the network. Ask the map first; only open source files
 when the map has sent you to a specific `file:line`.
 
-If the tools are missing or a call says there is no map, the map has not been built for this
-project. Run `/testatlas:index`, then reconnect the server (`/mcp`) or restart the session.
+If a call answers "TestAtlas has no map loaded", the map has not been built for this project. Run
+`/testatlas:index`, then reconnect the server (`/mcp`) or restart the session.
 
 ## Which tool, when
 

@@ -38,8 +38,9 @@ fresh, stale, or missing.
 
 - The server reads the map once at startup. After building or rebuilding it, reconnect the server
   from `/mcp` or restart the session.
-- A project with no `codemap.db` makes the server exit at startup; `/mcp` shows it as failed until
-  `/testatlas:index` has run and the server is reconnected.
+- A project with no `codemap.db` still gets a running server (TestAtlas.Mcp 0.1.11 and later): the
+  tools are listed, and each call answers with an error that says to run `/testatlas:index`. After
+  building the map, reconnect the server from `/mcp`; it only reads the map at startup.
 - `scripts/check-map-age.py` here is a copy of the repository's canonical script; a test in the main
   solution fails if the two drift.
 

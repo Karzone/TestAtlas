@@ -26,9 +26,9 @@ no restore, no compilation, no network, seconds on most solutions.
    dotnet tool install --global TestAtlas.Mcp
    ```
 
-4. The MCP server reads the map once at startup. If the server was loaded before the map existed,
-   it has already exited; run `/mcp` and reconnect `testatlas`, or restart the session, before
-   using the tools. A rebuilt map over an existing file needs the same reconnect.
+4. The MCP server reads the map once at startup. A server that started before the map existed is
+   still running but holds no map, and a rebuilt map is not picked up either: run `/mcp` and
+   reconnect `testatlas`, or restart the session, before using the tools.
 
 Do not commit `codemap.db` unless the repository already tracks one; it is a build artefact and
 the repo's `.gitignore` usually excludes `*.db`.
