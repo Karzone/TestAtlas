@@ -196,7 +196,20 @@ custom MCP server** to write this entry for you. On the .NET 10 SDK you can skip
 use `"command": "dnx", "args": ["TestAtlas.Mcp", "--yes", "C:\\path\\to\\codemap.db"]` — `dnx`
 fetches and runs the server on demand.
 
-**Claude Code:**
+**Claude Code — as a plugin** (server, a skill that says when to use which tool, `/testatlas:index`,
+and a session-start check that tells Claude when the map is missing or stale):
+
+```bash
+claude plugin marketplace add Karzone/TestAtlas
+claude plugin install testatlas@testatlas
+```
+
+The plugin starts `testatlas-mcp` with no arguments, so it serves the `codemap.db` at the root of
+whatever project the session is opened in — build it with `/testatlas:index`. Both tools must be on
+the PATH (`dotnet tool install --global TestAtlas.Cli`, then the same for `TestAtlas.Mcp`). The plugin lives in
+[`claude-plugin/`](claude-plugin/).
+
+**Claude Code — one server, no plugin:**
 
 ```bash
 claude mcp add testatlas -- testatlas-mcp path/to/codemap.db

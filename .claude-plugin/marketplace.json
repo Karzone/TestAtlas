@@ -1,0 +1,12 @@
+{
+  "name": "testatlas",
+  "description": "TestAtlas for Claude Code: a queryable map of your .NET test-automation solution",
+  "owner": { "name": "Karzone" },
+  "plugins": [
+    {
+      "name": "testatlas",
+      "source": "./claude-plugin",
+      "description": "Find existing steps before writing new ones, trace the blast radius of a change, and keep the map fresh"
+    }
+  ]
+}

@@ -48,6 +48,7 @@ TestAtlas/
 ├─ samples/             # real projects to point the tool at (SampleShop, ReqnrollLoginDemo)
 ├─ docs/                # sample outputs + operational guides (troubleshooting, map freshness)
 ├─ scripts/             # check-map-age.py + git hooks (map freshness / staleness)
+├─ claude-plugin/       # Claude Code plugin: .mcp.json, skills, SessionStart hook (its check-map-age.py is a guarded copy)
 ├─ specs/               # codemap-indexer.md, codemap-mcp.md — the full specifications
 └─ TestAtlas.sln
 ```

@@ -26,6 +26,13 @@ It reads the map's `generated_utc` + `solution_path`, then scans **authored** so
 
 *(Python 3, stdlib only — runs on Windows, macOS, Linux.)*
 
+## Warn automatically at session start (Claude Code plugin)
+
+The [Claude Code plugin](../claude-plugin/) runs the same checker as a `SessionStart` hook: in a
+project with a `*.sln`, Claude is told at the start of every session whether the map is missing,
+fresh or stale, and to run `/testatlas:index` when it is not fresh. It says nothing in projects
+without a solution file.
+
 ## Warn automatically after every pull (git hook)
 
 A version-controlled `post-merge` hook runs the check after each merge / `git pull` — it only

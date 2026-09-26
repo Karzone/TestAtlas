@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "testatlas": {
+      "command": "testatlas-mcp"
+    }
+  }
+}
