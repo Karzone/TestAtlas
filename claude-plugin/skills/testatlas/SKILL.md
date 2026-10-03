@@ -13,6 +13,26 @@ when the map has sent you to a specific `file:line`.
 If a call answers "TestAtlas has no map loaded", the map has not been built for this project. Run
 `/testatlas:index`, then reconnect the server (`/mcp`) or restart the session.
 
+## If the tools are not installed
+
+The plugin registers the server as `testatlas-mcp` on the PATH but does not install it. When the
+`testatlas` server shows as failed in `/mcp`, the session-start note says a tool is missing, or
+`command -v testatlas-mcp` finds nothing, stop and offer the install before anything else. Show
+the commands exactly like this (they are the same in PowerShell, bash and zsh) and offer to run
+them yourself; they need the .NET 8 SDK or later and reach only nuget.org:
+
+```bash
+dotnet tool install --global TestAtlas.Cli
+```
+
+```bash
+dotnet tool install --global TestAtlas.Mcp
+```
+
+Then: `/mcp` → reconnect `testatlas` (or restart the session), and `/testatlas:index` to build
+the map. Already installed but behind? `dotnet tool update --global TestAtlas.Cli` and the same
+for `TestAtlas.Mcp`.
+
 ## Which tool, when
 
 | You are about to | Call first |

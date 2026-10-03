@@ -7,19 +7,25 @@ suite calls. Read-only, offline, deterministic. The map is one SQLite file (`cod
 
 ## Install
 
-Both TestAtlas tools must be on the PATH (they need the .NET 8 SDK or later):
+Install the plugin from the Anthropic directory (`/plugin` in Claude Code → search **TestAtlas**),
+or from this repository as its own marketplace:
+
+```bash
+claude plugin marketplace add Karzone/TestAtlas
+claude plugin install testatlas@testatlas
+```
+
+The plugin does not install the two TestAtlas tools it drives; they are .NET global tools and need
+the .NET 8 SDK or later. If they are missing, the session-start note and the `/testatlas` skill say
+so and offer the commands (identical in PowerShell, bash and zsh), and Claude can run them for you:
 
 ```bash
 dotnet tool install --global TestAtlas.Cli
 dotnet tool install --global TestAtlas.Mcp
 ```
 
-Then add the marketplace and install the plugin:
-
-```bash
-claude plugin marketplace add Karzone/TestAtlas
-claude plugin install testatlas@testatlas
-```
+After installing them, reconnect the `testatlas` server from `/mcp` (it failed to start while the
+command was missing) or restart the session.
 
 Open Claude Code at the root of a solution and run `/testatlas:index` once. From then on the
 `testatlas` tools answer from the map, and every session opens with a note saying whether the map is

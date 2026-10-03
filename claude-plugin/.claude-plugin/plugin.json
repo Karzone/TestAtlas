@@ -1,11 +1,23 @@
 {
   "name": "testatlas",
   "displayName": "TestAtlas",
-  "version": "0.1.0",
-  "description": "A queryable map of your .NET test-automation solution for Claude: find existing steps before writing new ones, trace the blast radius of a change, and keep the map fresh.",
-  "author": { "name": "Karzone", "url": "https://github.com/Karzone" },
+  "version": "0.1.1",
+  "description": "A queryable map of your .NET test-automation solution for Claude: find existing steps before writing new ones, trace the blast radius of a change, and keep the map fresh. Needs the .NET 8 SDK and two global tools (dotnet tool install --global TestAtlas.Cli / TestAtlas.Mcp); the plugin tells you when they are missing.",
+  "author": {
+    "name": "Karzone",
+    "url": "https://github.com/Karzone"
+  },
   "homepage": "https://github.com/Karzone/TestAtlas",
   "repository": "https://github.com/Karzone/TestAtlas",
   "license": "MIT",
-  "keywords": ["dotnet", "testing", "reqnroll", "specflow", "gherkin", "mcp", "test-automation", "code-analysis"]
+  "keywords": [
+    "dotnet",
+    "testing",
+    "reqnroll",
+    "specflow",
+    "gherkin",
+    "mcp",
+    "test-automation",
+    "code-analysis"
+  ]
 }
