@@ -1,6 +1,6 @@
 ---
 name: testatlas
-description: Use before writing, changing or reviewing tests in a .NET test-automation solution (Reqnroll, SpecFlow, NUnit, xUnit, MSTest, Playwright, RestSharp). Looks up existing step definitions, scenarios, page objects and API endpoints through the testatlas MCP tools instead of reading files, and traces which scenarios a change would affect.
+description: Use for any question about the tests in a .NET test-automation solution (Reqnroll, SpecFlow, NUnit, xUnit, MSTest, Playwright, RestSharp) - finding, identifying, listing or counting the tests, scenarios or step definitions for a feature or keyword, checking whether coverage exists, and before writing, changing or reviewing tests. Answers through the testatlas MCP tools instead of grep or reading files - existing step definitions, scenarios, tags, page objects and API endpoints - and traces which scenarios a change would affect.
 ---
 
 # TestAtlas
@@ -57,6 +57,10 @@ for `TestAtlas.Mcp`.
 
 ## Rules
 
+0. "Find / identify / list / count the tests for X" is a map question, not a file search. Start with
+   `search_scenarios` (and `search_steps` for the steps behind them), try the obvious synonyms as
+   separate queries, then `get_scenario` for the ones that matter. Do not grep `.feature` files
+   first; grep only to confirm something the map could not answer, and say that you did.
 1. Never author a step definition without a `resolve_step` call that returned `none`. Duplicated
    steps are the failure mode this map exists to prevent.
 2. Before changing a step definition, page object or API client, run `impact` and name the affected

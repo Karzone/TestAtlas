@@ -54,7 +54,7 @@ fi
 
 out=$("$PY" "$checker" "$db" 2>/dev/null)
 case $? in
-    0) echo "TestAtlas map is fresh ($db). Use the testatlas tools to look up steps, scenarios and impact before writing tests." ;;
+    0) echo "TestAtlas map is fresh ($db). For any question about which tests, scenarios, step definitions, tags or endpoints exist in this solution - finding, listing, counting, or checking coverage - call the testatlas MCP tools (search_scenarios, search_steps, get_scenario, impact) first instead of searching the files with grep: the map answers in one call and returns file:line. Read source files only where the map points." ;;
     1) echo "TestAtlas map is STALE - source changed since it was built. Run /testatlas:index before trusting the testatlas tools." ; echo "$out" | head -5 ;;
     *) ;;   # unreadable map: the server will report it; say nothing here
 esac
