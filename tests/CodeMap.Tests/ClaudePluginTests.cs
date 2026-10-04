@@ -38,4 +38,20 @@ public sealed class ClaudePluginTests
         Assert.Equal(manifest.RootElement.GetProperty("name").GetString(), entry.GetProperty("name").GetString());
         Assert.Equal("./claude-plugin", entry.GetProperty("source").GetString());
     }
+
+    [Fact]
+    public void Every_skill_is_named_after_its_folder_and_offers_the_same_two_installs()
+    {
+        // A skill whose `name:` differs from its folder is not the slash command the README promises, and a
+        // skill that drives the command-line tools must be able to say how to get both of them.
+        var skills = Directory.GetDirectories(Path.Combine(RepoRoot(), "claude-plugin", "skills"));
+        Assert.Contains(skills, d => Path.GetFileName(d) == "report");
+        foreach (var dir in skills)
+        {
+            var text = File.ReadAllText(Path.Combine(dir, "SKILL.md"));
+            Assert.Contains($"name: {Path.GetFileName(dir)}", File.ReadAllLines(Path.Combine(dir, "SKILL.md")));
+            Assert.Contains("dotnet tool install --global TestAtlas.Cli", text);
+            Assert.Contains("dotnet tool install --global TestAtlas.Mcp", text);
+        }
+    }
 }

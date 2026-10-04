@@ -7,13 +7,18 @@ suite calls. Read-only, offline, deterministic. The map is one SQLite file (`cod
 
 ## Install
 
-Install the plugin from the Anthropic directory (`/plugin` in Claude Code → search **TestAtlas**),
-or from this repository as its own marketplace:
+In the Claude desktop app or on claude.ai, find **TestAtlas** in the Anthropic Directory and enable
+it there.
+
+In a terminal, the `/plugin` Discover tab searches only the marketplaces you have added, and the
+Anthropic Directory is not one of them. Add this repository as a marketplace, then install:
 
 ```bash
 claude plugin marketplace add Karzone/TestAtlas
 claude plugin install testatlas@testatlas
 ```
+
+Once the marketplace is added, `/plugin` → Discover → **testatlas** finds it too.
 
 The plugin does not install the two TestAtlas tools it drives; they are .NET global tools and need
 the .NET 8 SDK or later. If they are missing, the session-start note and the `/testatlas` skill say
@@ -29,7 +34,8 @@ command was missing) or restart the session.
 
 Open Claude Code at the root of a solution and run `/testatlas:index` once. From then on the
 `testatlas` tools answer from the map, and every session opens with a note saying whether the map is
-fresh, stale, or missing.
+fresh, stale, or missing. `/testatlas:report` writes the map as one HTML file you can open in a
+browser.
 
 ## What is inside
 
@@ -38,15 +44,18 @@ fresh, stale, or missing.
 | MCP server `testatlas` | `testatlas-mcp` with no arguments; it serves the `codemap.db` at the project root. 11 read-only tools: `resolve_step`, `step_catalog`, `impact`, `search_steps`, `search_scenarios`, `get_scenario`, `get_step_definition`, `list_tags`, `list_endpoints`, `project_dependencies`, `stats`. |
 | Skill `testatlas` | Tells Claude which tool to call before writing a step, composing a scenario, or changing a class, step or endpoint. |
 | Skill `index` (`/testatlas:index`) | Builds or rebuilds the map for the solution in the current project. |
+| Skill `report` (`/testatlas:report`) | Writes `codemap.html`, a self-contained drill-down of features, scenarios, bindings, class kinds and endpoints, and on request `codemap-map.html`, the project dependency graph. Builds the map first if it is missing or stale. |
 | `SessionStart` hook | In a project with a `*.sln`, reports whether the map is missing, fresh or stale. Silent elsewhere. Always exits 0. |
 
 ## Notes
 
-- The server reads the map once at startup. After building or rebuilding it, reconnect the server
-  from `/mcp` or restart the session.
-- A project with no `codemap.db` still gets a running server (TestAtlas.Mcp 0.1.11 and later): the
-  tools are listed, and each call answers with an error that says to run `/testatlas:index`. After
-  building the map, reconnect the server from `/mcp`; it only reads the map at startup.
+- The server is part of the plugin: installing the plugin registers it, and it starts with every
+  session. It usually starts before the map exists. TestAtlas.Mcp 0.1.12 and later looks for
+  `codemap.db` on every call and re-reads a rebuilt one, so the tools answer as soon as
+  `/testatlas:index` has run, with nothing to reconnect.
+- On TestAtlas.Mcp 0.1.11 the server reads the map once at startup: after building or rebuilding
+  it, reconnect the server from `/mcp` or restart the session. Better, update it:
+  `dotnet tool update --global TestAtlas.Mcp`.
 - `scripts/check-map-age.py` here is a copy of the repository's canonical script; a test in the main
   solution fails if the two drift.
 

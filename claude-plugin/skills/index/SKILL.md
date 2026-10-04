@@ -31,9 +31,15 @@ no restore, no compilation, no network, seconds on most solutions.
    The summary line reports projects, classes, methods, step definitions, features, scenarios and
    any diagnostics. Diagnostics are files the indexer could not parse; report them, they are not
    fatal.
-3. The MCP server reads the map once at startup. A server that started before the map existed is
-   still running but holds no map, and a rebuilt map is not picked up either: run `/mcp` and
-   reconnect `testatlas`, or restart the session, before using the tools.
+3. Check the server sees the new map: call the `stats` tool. TestAtlas.Mcp 0.1.12 and later looks
+   for the map on every call and re-reads a rebuilt one, so this answers with the counts just
+   printed. If it still answers "no map loaded", look at whether the message names a directory:
+   - It names no directory: the server is 0.1.11 or older and read the map only at startup.
+     `/mcp` → reconnect `testatlas` (or restart the session) loads the map now; offer
+     `dotnet tool update --global TestAtlas.Mcp` so it does not happen again.
+   - It names a directory other than this project root: the server was started somewhere else, and
+     the map must be built there or passed to it by path.
+4. Offer the HTML drill-down of what was just indexed: `/testatlas:report`.
 
 Do not commit `codemap.db` unless the repository already tracks one; it is a build artefact and
 the repo's `.gitignore` usually excludes `*.db`.

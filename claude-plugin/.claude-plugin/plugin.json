@@ -1,7 +1,7 @@
 {
   "name": "testatlas",
   "displayName": "TestAtlas",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "A queryable map of your .NET test-automation solution for Claude: find existing steps before writing new ones, trace the blast radius of a change, and keep the map fresh. Needs the .NET 8 SDK and two global tools (dotnet tool install --global TestAtlas.Cli / TestAtlas.Mcp); the plugin tells you when they are missing.",
   "author": {
     "name": "Karzone",

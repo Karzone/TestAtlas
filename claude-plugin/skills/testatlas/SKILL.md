@@ -11,7 +11,16 @@ call here changes the code, the map or the network. Ask the map first; only open
 when the map has sent you to a specific `file:line`.
 
 If a call answers "TestAtlas has no map loaded", the map has not been built for this project. Run
-`/testatlas:index`, then reconnect the server (`/mcp`) or restart the session.
+`/testatlas:index` and call the tool again: the server (TestAtlas.Mcp 0.1.12 and later) picks the
+map up on the next call. Do not fall back to the `testatlas` command line while the tools are
+refusing; build the map and retry. If the retry still says "no map loaded" and the message names no
+directory, the server is 0.1.11 or older and read the map only at startup: reconnect it (`/mcp`) or
+restart the session, and offer `dotnet tool update --global TestAtlas.Mcp`. If it names a directory
+other than the project root, the server was started somewhere else: build the map there or pass it
+by path.
+
+For a human-readable overview rather than a lookup, `/testatlas:report` writes the map as one HTML
+file.
 
 ## If the tools are not installed
 
