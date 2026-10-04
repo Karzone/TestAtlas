@@ -30,6 +30,14 @@ public sealed class McpServer
         ?? "0.0.0";
     private const int MaxRows = 200; // cap any list response so a huge map can't flood the agent
 
+    private const string Instructions =
+        "TestAtlas is a prebuilt map of this .NET test-automation solution: features, scenarios, step definitions, " +
+        "tags, page objects, API endpoints and how they connect. Use these tools first, instead of grep or reading " +
+        "files, for any question about the tests: finding, listing or counting the scenarios or steps for a feature " +
+        "or keyword (search_scenarios, search_steps), reading a scenario (get_scenario), checking whether a step " +
+        "already exists before writing one (resolve_step), and finding which scenarios a change would break (impact). " +
+        "Results carry file:line; open source files only where the map points. Every tool is read-only and offline.";
+
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
     // Empty for a server without a map and without a configured path (then discovery names the file).
@@ -179,6 +187,9 @@ public sealed class McpServer
                     protocolVersion = ProtocolVersion,
                     capabilities = new { tools = new { } },
                     serverInfo = new { name = ServerName, version = ServerVersion },
+                    // Hosts put this in the model's context whether or not the tools are loaded yet. Without
+                    // it an agent asked to "find the tests for X" greps the feature files and never calls in.
+                    instructions = Instructions,
                 }),
                 "ping" => Result(id, new { }),
                 "tools/list" => Result(id, new { tools = _tools.Select(t => new { name = t.Name, description = t.Description, inputSchema = t.InputSchema }) }),
@@ -236,11 +247,13 @@ public sealed class McpServer
             },
             Impact),
 
-        new("search_steps", "Full-text search over step definitions (expression text + method + class name). Returns matching step definitions.",
+        new("search_steps", "Full-text search over step definitions (expression text + method + class name). Returns matching step definitions. " +
+            "Use this instead of grepping binding classes.",
             new { type = "object", properties = new { query = new { type = "string", description = "Search terms." } }, required = new[] { "query" } },
             a => SearchSteps(Arg(a, "query"))),
 
-        new("search_scenarios", "Full-text search over scenarios (feature name + scenario name + step text + tags). Returns matching scenarios.",
+        new("search_scenarios", "Find the tests for a topic: full-text search over scenarios (feature name + scenario name + step text + tags). " +
+            "Returns matching scenarios with feature and file:line. Use this instead of grepping .feature files when asked to find, list or count tests.",
             new { type = "object", properties = new { query = new { type = "string", description = "Search terms." } }, required = new[] { "query" } },
             a => SearchScenarios(Arg(a, "query"))),
 

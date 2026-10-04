@@ -125,6 +125,10 @@ public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
             .GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Split('+')[0];
         Assert.Equal(expected, result.GetProperty("serverInfo").GetProperty("version").GetString());
         Assert.True(result.GetProperty("capabilities").TryGetProperty("tools", out _));
+        // The only text a host shows the model before any tool is loaded: it has to say when to call in.
+        var instructions = result.GetProperty("instructions").GetString()!;
+        Assert.Contains("instead of grep", instructions);
+        Assert.Contains("search_scenarios", instructions);
     }
 
     [Fact]
