@@ -32,14 +32,28 @@ public sealed class McpServer
 
     private static readonly JsonSerializerOptions Json = new() { WriteIndented = false };
 
-    // Empty for a server without a map (then it is only quoted in NoMapMessage).
-    private readonly string _dbPath;
+    // Empty for a server without a map and without a configured path (then discovery names the file).
+    private string _dbPath;
     // Never dereferenced when !_hasMap: HandleToolCall refuses every call before a handler runs.
-    private readonly MapDocument _doc;
-    private readonly bool _hasMap;
+    private MapDocument _doc;
+    private bool _hasMap;
     private readonly IReadOnlyList<ToolDef> _tools;
 
-    public McpServer(string dbPath) : this(dbPath, MapReader.Read(dbPath)) { }
+    // The map is followed on disk: a server that started before `testatlas index` ran, or that is serving a
+    // map since rebuilt, reads the file again on the next tool call. Hosts start the server with the session,
+    // usually before the map exists, and "reconnect the server" is an instruction nobody sees.
+    // False only for an injected map (the test seam), which has no file to follow.
+    private readonly bool _followsFile;
+    // Where a map is looked for when no path was configured: the working directory the server started in.
+    private readonly string _searchDirectory = string.Empty;
+    // Write time and length of the file _doc was read from; a different pair means the map was rebuilt.
+    private (DateTime WrittenUtc, long Length) _loadedStamp;
+
+    public McpServer(string dbPath) : this(dbPath, MapReader.Read(dbPath))
+    {
+        _followsFile = true;
+        _loadedStamp = StampOf(dbPath);
+    }
 
     /// <summary>Test seam: inject a preloaded map instead of reading from disk.</summary>
     public McpServer(string dbPath, MapDocument doc)
@@ -54,28 +68,88 @@ public sealed class McpServer
     /// A server with no map. It completes the MCP handshake and advertises every tool, but each call answers
     /// with <c>isError</c> and the instructions for supplying a map. Most hosts hide a crashed server's
     /// stderr and show the agent a tool error — so a misconfigured registration explains itself where it is
-    /// seen, instead of dying with exit code 2 in a log nobody opens.
+    /// seen, instead of dying with exit code 2 in a log nobody opens. Each call looks for the map again, so
+    /// the refusal ends the moment one is built.
     /// </summary>
     /// <param name="attemptedPath">The map path that was configured but does not exist, if any.</param>
-    public static McpServer WithoutMap(string? attemptedPath = null) => new(attemptedPath, noMap: true);
+    /// <param name="searchDirectory">Where to look for codemap.db / atlas.db when no path was configured;
+    /// the current working directory when omitted.</param>
+    public static McpServer WithoutMap(string? attemptedPath = null, string? searchDirectory = null) =>
+        new(attemptedPath, searchDirectory ?? Directory.GetCurrentDirectory(), noMap: true);
 
-    private McpServer(string? attemptedPath, bool noMap)
+    private McpServer(string? attemptedPath, string searchDirectory, bool noMap)
     {
         _dbPath = attemptedPath ?? string.Empty;
         _doc = null!;   // guarded by _hasMap
         _hasMap = !noMap;
+        _followsFile = true;
+        _searchDirectory = searchDirectory;
         _tools = BuildTools();
+    }
+
+    /// <summary>The conventional map in a directory: codemap.db (the CLI's default output), then atlas.db.</summary>
+    public static string? DiscoverMap(string directory)
+    {
+        foreach (var name in new[] { "codemap.db", "atlas.db" })
+        {
+            var candidate = Path.Combine(directory, name);
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        return null;
+    }
+
+    private static (DateTime WrittenUtc, long Length) StampOf(string path)
+    {
+        var info = new FileInfo(path);
+        return (info.LastWriteTimeUtc, info.Length);
+    }
+
+    /// <summary>
+    /// Read the map if one has appeared since startup, or again if the served file was rebuilt. A rebuilt map
+    /// that cannot be read leaves the loaded one in place and is tried again on the next call. Returns the
+    /// reason when a map file is there but nothing could be loaded from it; null otherwise.
+    /// </summary>
+    private string? FollowMapOnDisk()
+    {
+        if (!_followsFile) return null;
+
+        var path = _dbPath.Length > 0 ? _dbPath : DiscoverMap(_searchDirectory);
+        if (path is null || !File.Exists(path)) return null;
+
+        try
+        {
+            var stamp = StampOf(path);
+            if (_hasMap && stamp == _loadedStamp) return null;
+
+            _doc = MapReader.Read(path);
+            _dbPath = path;
+            _loadedStamp = stamp;
+            _hasMap = true;
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return _hasMap
+                ? null
+                : $"TestAtlas found a map at '{path}' but could not read it: {ex.Message} Rebuild it with `testatlas index`.";
+        }
     }
 
     /// <summary>Why a call was refused when the server has no map, and what to do about it. Prose: the agent relays it.</summary>
     private string NoMapMessage() =>
         "TestAtlas has no map loaded, so this tool cannot answer. " +
         (_dbPath.Length == 0
-            ? "The server was started without a map path and found no codemap.db in its working directory. "
-            : $"The server was started with map path '{_dbPath}', which does not exist. ") +
-        "Build a map with `testatlas index <path-to-solution.sln>` (writes ./codemap.db), then give its path to " +
-        "testatlas-mcp as the last argument of the MCP server registration or via the TESTATLAS_DB environment " +
-        "variable, and restart the agent session so the server picks it up.";
+            ? $"The server was started without a map path and found no codemap.db in its working directory ('{_searchDirectory}'). " +
+              "Build a map there with `testatlas index <path-to-solution.sln>` (writes ./codemap.db) and call the tool again: " +
+              "the server picks the map up on the next call, no restart needed. If the map lives somewhere else, give its path to " +
+              "testatlas-mcp as the last argument of the MCP server registration or via the TESTATLAS_DB environment " +
+              "variable, and restart the agent session."
+            : $"The server was started with map path '{_dbPath}', which does not exist. " +
+              "Build a map at that path with `testatlas index <path-to-solution.sln> --output <path>` and call the tool again: " +
+              "the server picks it up on the next call. To serve a different file, change the last argument of the MCP server " +
+              "registration or the TESTATLAS_DB environment variable, and restart the agent session.");
 
     private sealed record ToolDef(string Name, string Description, object InputSchema, Func<JsonElement, string> Handler);
 
@@ -130,8 +204,9 @@ public sealed class McpServer
 
         // Per MCP, a failure of the tool itself (as opposed to a malformed request) is a result with isError,
         // which hosts surface to the model; a JSON-RPC error would be swallowed as a transport fault.
+        var unreadable = FollowMapOnDisk();
         if (!_hasMap)
-            return Result(id, new { content = new[] { new { type = "text", text = NoMapMessage() } }, isError = true });
+            return Result(id, new { content = new[] { new { type = "text", text = unreadable ?? NoMapMessage() } }, isError = true });
 
         var text = tool.Handler(args);
         // Per MCP, a tool result is content blocks; text carries the (JSON) payload the agent parses.

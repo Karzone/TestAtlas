@@ -42,6 +42,14 @@ call with that error so the agent can relay it; earlier releases exit with `code
 **Fix: pass the map path explicitly** as the last argument in your `.mcp.json` /
 `claude mcp add` registration (double-backslash it on Windows), or set `TESTATLAS_DB`.
 
+**The server started before the map was built** (the usual case with the Claude Code plugin, which
+starts it with the session): from 0.1.12 nothing needs doing. Every tool call looks for the map
+again, and re-reads one that `testatlas index` has rebuilt, so the first call after indexing
+answers. The error names the directory the server searched; if that is not your solution folder,
+the map is being built somewhere the server is not looking. On 0.1.11 and earlier the server reads
+the map once at startup: reconnect it (`/mcp` in Claude Code) or restart the session, or update
+with `dotnet tool update --global TestAtlas.Mcp`.
+
 ## The agent doesn't seem to use TestAtlas
 
 Don't ask the agent *"are you using testatlas?"* — models don't reliably introspect their own tool

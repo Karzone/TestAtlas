@@ -15,6 +15,8 @@ using TestAtlas.Mcp;
 // With no usable map the server STILL STARTS (McpServer.WithoutMap): the handshake and tools/list succeed and
 // every tools/call answers with an error that says how to supply one. Releases before 0.1.11 exited with
 // code 2 here — which most hosts report only as "server failed", with the usage text in a log nobody opens.
+// From 0.1.12 each tools/call looks for the map again and re-reads one that was rebuilt: a host starts the
+// server with the session, usually before `testatlas index` has run, and nobody reconnects it.
 
 var dbPath = args.FirstOrDefault(a => !a.StartsWith('-'))
              ?? Environment.GetEnvironmentVariable("TESTATLAS_DB");
@@ -31,8 +33,8 @@ if (string.IsNullOrWhiteSpace(dbPath) || !File.Exists(dbPath))
     Console.Error.WriteLine("    - the TESTATLAS_DB environment variable, or");
     Console.Error.WriteLine("    - a codemap.db (or atlas.db) in the current working directory.");
     Console.Error.WriteLine(string.IsNullOrWhiteSpace(dbPath)
-        ? "testatlas-mcp: no map found — starting without one; every tool call will say so until a map is supplied."
-        : $"testatlas-mcp: map '{dbPath}' does not exist — starting without one; every tool call will say so until a map is supplied.");
+        ? "testatlas-mcp: no map found — starting without one; every tool call will say so until one is built."
+        : $"testatlas-mcp: map '{dbPath}' does not exist — starting without one; every tool call will say so until one is built.");
     server = McpServer.WithoutMap(string.IsNullOrWhiteSpace(dbPath) ? null : dbPath);
 }
 else
@@ -63,16 +65,5 @@ while ((line = Console.In.ReadLine()) is not null)
 
 return 0;
 
-// Look for a conventional map file in the current working directory. Prefers `codemap.db` (the CLI's
-// default output name) and falls back to `atlas.db`. Returns null when neither is present.
-static string? DiscoverMapInWorkingDirectory()
-{
-    foreach (var name in new[] { "codemap.db", "atlas.db" })
-    {
-        var candidate = Path.Combine(Directory.GetCurrentDirectory(), name);
-        if (File.Exists(candidate))
-            return candidate;
-    }
-
-    return null;
-}
+// Look for a conventional map file in the current working directory (codemap.db, then atlas.db).
+static string? DiscoverMapInWorkingDirectory() => McpServer.DiscoverMap(Directory.GetCurrentDirectory());

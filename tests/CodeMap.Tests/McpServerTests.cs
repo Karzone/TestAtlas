@@ -14,7 +14,90 @@ namespace TestAtlas.Tests;
 public sealed class McpServerTests : IClassFixture<IndexedFixtureSolution>
 {
     private readonly McpServer _server;
-    public McpServerTests(IndexedFixtureSolution fx) => _server = new McpServer(fx.DbPath, fx.Doc);
+    private readonly IndexedFixtureSolution _fx;
+    public McpServerTests(IndexedFixtureSolution fx)
+    {
+        _fx = fx;
+        _server = new McpServer(fx.DbPath, fx.Doc);
+    }
+
+    private static JsonElement StatsCall(McpServer server) => JsonDocument.Parse(server.HandleLine(
+        """{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"stats","arguments":{}}}""")!)
+        .RootElement.GetProperty("result");
+
+    [Fact]
+    public void A_server_started_before_the_map_existed_serves_it_on_the_next_call()
+    {
+        // What a plugin host does: it starts the server with the session, in the project root, before anyone
+        // has run `testatlas index`. Telling the person to reconnect the server did not survive being relayed.
+        using var project = new TempDir();
+        var server = McpServer.WithoutMap(searchDirectory: project.Path);
+
+        var before = StatsCall(server);
+        Assert.True(before.GetProperty("isError").GetBoolean());
+        var refusal = before.GetProperty("content")[0].GetProperty("text").GetString()!;
+        Assert.Contains(project.Path, refusal);          // names the directory it searched
+        Assert.Contains("no restart needed", refusal);
+
+        File.Copy(_fx.DbPath, project.File("codemap.db"));
+
+        var after = StatsCall(server);
+        Assert.False(after.GetProperty("isError").GetBoolean());
+        Assert.Equal(StatsCall(_server).GetProperty("content")[0].GetProperty("text").GetString(),
+                     after.GetProperty("content")[0].GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public void A_configured_map_path_that_did_not_exist_is_served_once_it_does()
+    {
+        using var project = new TempDir();
+        var path = project.File("elsewhere.db");
+        var server = McpServer.WithoutMap(path, searchDirectory: project.Path);
+        Assert.True(StatsCall(server).GetProperty("isError").GetBoolean());
+
+        // A conventional map beside it is NOT what was configured, so it is not served in its place.
+        File.Copy(_fx.DbPath, project.File("codemap.db"));
+        Assert.True(StatsCall(server).GetProperty("isError").GetBoolean());
+
+        File.Copy(_fx.DbPath, path);
+        Assert.False(StatsCall(server).GetProperty("isError").GetBoolean());
+    }
+
+    [Fact]
+    public void A_rebuilt_map_is_read_again_and_an_unreadable_one_leaves_the_loaded_map_in_place()
+    {
+        using var project = new TempDir();
+        var path = project.File("codemap.db");
+        File.Copy(_fx.DbPath, path);
+        var server = new McpServer(path);
+        var first = StatsCall(server).GetProperty("content")[0].GetProperty("text").GetString();
+
+        // Rebuilt from a different solution: the answer must be the new map's, with no reconnect.
+        var (_, _, _) = CliRunner.Index(FixturePaths.BrokenSolution, path, "--quiet");
+        Assert.True(File.Exists(path));
+        var rebuilt = StatsCall(server);
+        Assert.False(rebuilt.GetProperty("isError").GetBoolean());
+        var second = rebuilt.GetProperty("content")[0].GetProperty("text").GetString();
+        Assert.NotEqual(first, second);
+
+        // A file that is not a map: keep answering from what is loaded rather than losing the map.
+        File.WriteAllText(path, "not a sqlite file");
+        var kept = StatsCall(server);
+        Assert.False(kept.GetProperty("isError").GetBoolean());
+        Assert.Equal(second, kept.GetProperty("content")[0].GetProperty("text").GetString());
+    }
+
+    [Fact]
+    public void A_map_file_that_cannot_be_read_says_so_instead_of_claiming_there_is_none()
+    {
+        using var project = new TempDir();
+        File.WriteAllText(project.File("codemap.db"), "not a sqlite file");
+        var result = StatsCall(McpServer.WithoutMap(searchDirectory: project.Path));
+        Assert.True(result.GetProperty("isError").GetBoolean());
+        var text = result.GetProperty("content")[0].GetProperty("text").GetString()!;
+        Assert.Contains("could not read it", text);
+        Assert.DoesNotContain("no map loaded", text);
+    }
 
     private JsonElement Call(string json) => JsonDocument.Parse(_server.HandleLine(json)!).RootElement;
 
