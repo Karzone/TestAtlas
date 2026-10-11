@@ -360,8 +360,10 @@ reverse **blast radius** — how many scenarios reach it, via `EndpointReachAll`
 an **expandable toggle**: opening a row reveals the reached scenarios grouped by feature, each with the
 step text that connects it (via `EndpointScenarioDetails`, resolved only for the shown rows) — the same
 drill-down `impact --endpoint` prints, capped per row with a pointer to the CLI for the exhaustive list.
-All map-derived text is HTML-escaped. Deterministic: the only volatile value
-(the generated timestamp) is read from the map, not the clock. When the map's `user_version`
+All map-derived text is HTML-escaped. The header shows the solution path relative to the
+directory `report` runs from when the solution lies under it (forward slashes), so a committed
+report carries no machine-specific absolute path; otherwise it shows the path as recorded in the map.
+Deterministic: the only volatile value (the generated timestamp) is read from the map, not the clock. When the map's `user_version`
 predates the current schema, the report shows a **stale-schema banner** (and `report`/`search`
 print a matching console note) explaining that facets like Gherkin features / coverage / search are
 empty because the map is old — re-run `index` to populate them — so empty sections never read as a bug.
