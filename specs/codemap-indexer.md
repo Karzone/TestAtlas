@@ -283,7 +283,7 @@ codemap stats  [<db>]      Human-readable summary: entity counts per project,
 codemap report [<db>]      Writes a single self-contained HTML drill-down of the map
     --html <file>          Output path (default: <db>.html)
 
-codemap map [<db>]         Writes a self-contained project dependency graph (SVG)
+codemap map [<db>]         Writes a self-contained project dependency graph (HTML)
     --html <file>          Output path (default: <db>-map.html)
 
 codemap impact [<db>]      Blast radius: scenarios affected by changing an entity
@@ -316,20 +316,25 @@ that call them (directly a step definition, or a client/wrapper method whose cla
 
 The `map` command is a companion visualization: a **project dependency graph**. A directed edge
 A→B ("A depends on B") is derived by aggregating the map's cross-project `binds_to` / `uses_type` /
-`inherits` edges to project level (an edge whose endpoints resolve to two different projects). A
+`inherits` / `holds` edges to project level (an edge whose endpoints resolve to two different projects). A
 project pair connected **only** by a `.csproj` `references` edge — no semantic coupling — is drawn as a
-distinct **dashed** "build reference", so an infra library consumed purely via DI / `ProjectReference`
+distinct **dashed** "build-only reference", so an infra library consumed purely via DI / `ProjectReference`
 connects instead of reading as an isolated dead node (the header tallies the two kinds separately).
-Nodes are laid out on a deterministic circle, sized by in-degree so shared step-definition / page-object
-libraries stand out, coloured by project kind, with hover-to-isolate + pan/zoom. **Clicking a project
-pins it** and opens a dependency panel listing what it *depends on* and what *depends on it*, each with
-the underlying link breakdown (e.g. `→ SharedSteps · 340 binds_to`); clicking a panel entry walks the
-chain to that project, and each entry **expands to the class level** — the specific step / page-object
-classes behind that dependency, with counts (e.g. `CommonSteps · 320 binds_to`). The pinned panel also
-lists the project's **API endpoints** — the routes/operations its methods call (`calls_endpoint`),
-with a colour-coded verb badge and an `op` tag on operation-level ones. A manual light/dark toggle
-(persisted) and a collapsible header (full-viewport graph) round it out. Self-contained (inline SVG +
-vanilla JS, no libraries). Only projects and their cross-project edges (+ endpoints) are read, so it is instant.
+Projects are drawn as cards in deterministic **left-to-right layers** — entry points, shared code,
+foundation — by longest outgoing path (cycles guarded), ordered within each layer by three barycentre
+sweeps to cut crossings; labels drop the solution's common dot-prefix. Hovering a card highlights its
+direct neighbours in two hues: **blue** for what it uses, **violet** for what uses it. **Clicking a
+project pins it** and opens a details panel with *Depends on* / *Used by* lists, direct or transitive
+(transitive reach prefers code paths over build-only ones and labels each row by depth, e.g.
+`2 steps away · via Api.Cart`), in plain language (e.g. `Uses types 4× · holds as members 2×`); each
+row **expands to the class level** — the specific step / page-object classes behind that dependency.
+For a non-test project an impact note names the test projects a change can reach. The panel also lists
+the project's **API endpoints** — the routes/operations its methods call (`calls_endpoint`), with a
+colour-coded verb badge and an `operation` tag on operation-level ones. **Clicking an edge** opens the
+dependency itself with the classes behind it. Search-and-jump (`/`), zoom buttons, fit to view,
+keyboard navigation (arrow keys, `T` scope, `Esc`) and a persisted light/dark toggle round it out.
+Self-contained (inline CSS + SVG + vanilla JS, no libraries). Only projects and their cross-project
+edges (+ endpoints) are read, so it is instant.
 
 The `report` command is the **v1.x HTML visualization** on the roadmap (§13). It reads a map
 file and emits one self-contained HTML document — inline CSS/JS only, no external stylesheet,
