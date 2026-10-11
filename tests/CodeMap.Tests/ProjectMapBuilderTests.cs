@@ -79,8 +79,9 @@ public sealed class ProjectMapBuilderTests
 
         // The infra lib is connected (not an isolated 0-degree node) via a distinctly-styled dashed edge.
         Assert.Contains("class=\"edge ref\" data-a=\"1\" data-b=\"2\"", html);
-        Assert.Contains("build-only reference", html);   // called out in the header
-        Assert.Contains("0 dependencies", html);          // …not counted as a semantic dependency
+        Assert.Contains("<b>1</b><span>build-only reference</span>", html);   // called out in the header
+        Assert.Contains("<b>0</b><span>code dependencies</span>", html);      // …not counted as a code dependency
+        Assert.Contains("\"k\":{},\"ref\":true", html);                         // flagged in the blob for the panel
     }
 
     [Fact]
@@ -92,7 +93,7 @@ public sealed class ProjectMapBuilderTests
     }
 
     [Fact]
-    public void Has_theme_toggle_collapsible_header_and_a_working_hover_highlight_rule()
+    public void Has_theme_toggle_search_zoom_and_direction_highlight_rules()
     {
         var html = ProjectMapBuilder.Build(Doc());
 
@@ -102,14 +103,16 @@ public sealed class ProjectMapBuilderTests
         Assert.Contains("[data-theme=\"light\"]", html);
         Assert.Contains("testatlas:theme", html);
 
-        // Full-view: a collapsible floating panel.
-        Assert.Contains("toggleHeader()", html);
-        Assert.Contains("id=\"collapseBtn\"", html);
+        // Navigation chrome: search-and-jump, zoom buttons and fit-to-view, plus the drawn edge key.
+        Assert.Contains("placeholder=\"Search projects\"", html);
+        Assert.Contains("title=\"Fit to view (F)\"", html);
+        Assert.Contains("title=\"Reset zoom to 100% (0)\"", html);
+        Assert.Contains("Arrows point to what a project depends on", html);
 
-        // Hover-highlight specificity fix: the .active rule is scoped under svg.has-focus so it beats
-        // the dimming rule (the earlier bug was that dimming out-ranked the highlight).
-        Assert.Contains("svg.has-focus .edge.active", html);
-        Assert.Contains("svg.has-focus .node.active", html);
+        // Highlights separate the two directions: blue = what the focus uses, violet = what uses it.
+        Assert.Contains(".eg.r-down .edge{stroke:var(--fill-primary)}", html);
+        Assert.Contains(".eg.r-up .edge{stroke:var(--violet)}", html);
+        Assert.Contains(".node.r-dim{opacity:.32}", html);
     }
 
     [Fact]
@@ -122,20 +125,20 @@ public sealed class ProjectMapBuilderTests
         Assert.Contains("window.pin=function", html);
         Assert.Contains("window.unpin=function", html);
         Assert.Contains("Depends on", html);
-        Assert.Contains("Depended on by", html);
+        Assert.Contains("Used by", html);
 
         // The data blob carries node labels and the one cross-project link with its kind/count detail,
-        // so the panel can list "Feature.A → Lib.B · 1 binds_to". Names are JSON-escaped (< → <).
+        // so the panel can list "Feature.A → Lib.B · binds steps 1×". Names are JSON-escaped (< → <).
         Assert.Contains("window.__MAP__=", html);
-        Assert.Contains("\"a\":1,\"b\":2,\"w\":1,\"d\":\"1 binds_to\"", html);
+        Assert.Contains("\"a\":1,\"b\":2,\"w\":1,\"d\":\"1 binds_to\",\"k\":{\"binds_to\":1},\"ref\":false", html);
         Assert.Contains("Lib.B \\u003cb>", html);       // the < is <-escaped inside the <script> blob
         Assert.DoesNotContain("Lib.B <b>", html);       // never a raw tag that could break the script
 
         // Class-level drill-down: the link carries the target classes behind the dependency, so the
         // panel can expand "Feature.A → Lib.B" into "BSteps · 1 binds_to".
         Assert.Contains("\"cls\":[{\"c\":\"BSteps\",\"k\":\"binds_to\",\"w\":1}]", html);
-        Assert.Contains("toggleExp", html);
-        Assert.Contains("class'+(cls.length===1?'':'es')", html); // the visible "N class(es)" expander label
+        Assert.Contains("data-toggle=", html);
+        Assert.Contains("(e.cls.length===1?' class ':' classes ')", html); // the visible "N class(es)" expander label
 
         // Regression: the pointer must be captured only once a drag MOVES (via down.id), NOT on
         // pointerdown — capturing on pointerdown retargets the click to the <svg> so node clicks never
@@ -174,9 +177,104 @@ public sealed class ProjectMapBuilderTests
         Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "class=\"node "));
         Assert.DoesNotContain("class=\"edge\"", html);
 
-        // The panel renders an "API endpoints" section with verb badges + an operation tag.
-        Assert.Contains("API endpoints (", html);
-        Assert.Contains("ep-v ep-", html);
+        // The card says how many it calls; the panel renders an "API endpoints called" section with
+        // verb badges + an operation tag.
+        Assert.Contains("BDD tests · 2 endpoints", html);
+        Assert.Contains("API endpoints called", html);
+        Assert.Contains("verb v-", html);
+    }
+
+    [Fact]
+    public void Drops_the_shared_name_prefix_from_labels()
+    {
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Projects = new[]
+            {
+                new ProjectRow(1, "Shop.Tests.Api", "A.csproj", "net8.0", Kinds.BddTests),
+                new ProjectRow(2, "Shop.Core", "C.csproj", "net8.0", Kinds.SharedLibrary),
+            },
+        };
+        var html = ProjectMapBuilder.Build(doc);
+
+        Assert.Contains("\"prefix\":\"Shop.\"", html);
+        Assert.Contains("\"name\":\"Shop.Tests.Api\",\"short\":\"Tests.Api\"", html);
+        Assert.Contains("<div class=\"nm\">Core</div>", html);
+
+        // A segment only counts when every name keeps one after it: "Shop" + "Shop.Core" share nothing.
+        var flat = ProjectMapBuilder.Build(new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Projects = new[]
+            {
+                new ProjectRow(1, "Shop", "S.csproj", "net8.0", Kinds.Other),
+                new ProjectRow(2, "Shop.Core", "C.csproj", "net8.0", Kinds.SharedLibrary),
+            },
+        });
+        Assert.Contains("\"prefix\":\"\"", flat);
+        Assert.Contains("<div class=\"nm\">Shop.Core</div>", flat);
+    }
+
+    [Fact]
+    public void Lays_projects_out_in_layers_ordered_to_cut_crossings()
+    {
+        // The SampleShop graph: three test suites → four API / page libraries → Core. Layering counts
+        // build-only references too, so plain ProjectReference edges are enough to shape it.
+        var names = new[]
+        {
+            (1, "SampleShop.Api.Cart", Kinds.SharedLibrary), (2, "SampleShop.Api.Catalog", Kinds.SharedLibrary),
+            (3, "SampleShop.Api.Identity", Kinds.SharedLibrary), (4, "SampleShop.Core", Kinds.SharedLibrary),
+            (5, "SampleShop.Tests.Api", Kinds.BddTests), (6, "SampleShop.Tests.E2E", Kinds.BddTests),
+            (7, "SampleShop.Tests.Ui", Kinds.BddTests), (8, "SampleShop.Ui.Pages", Kinds.SharedLibrary),
+        };
+        var deps = new[] { (1, 4), (2, 4), (3, 4), (5, 1), (5, 2), (5, 3), (5, 4), (6, 1), (6, 2), (6, 3), (6, 4), (6, 8), (7, 4), (7, 8), (8, 4) };
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Projects = names.Select(x => new ProjectRow(x.Item1, x.Item2, "p.csproj", "net8.0", x.Item3)).ToArray(),
+            Edges = deps.Select(d => new EdgeRow(RefKinds.Project, d.Item1, RefKinds.Project, d.Item2, EdgeKinds.References, "")).ToArray(),
+        };
+        var html = ProjectMapBuilder.Build(doc);
+
+        string NodeKey(int id) => $"\"{id}\":{{\"name\":\"{names[id - 1].Item2}\",\"short\":\"{names[id - 1].Item2[11..]}\",\"kind\":\"{names[id - 1].Item3}\",";
+        foreach (var (id, col, row, x, y) in new[]
+        {
+            (5, 0, 0, 0, 80), (6, 0, 1, 0, 160), (7, 0, 2, 0, 240),                       // entry points
+            (1, 1, 0, 356, 40), (2, 1, 1, 356, 120), (3, 1, 2, 356, 200), (8, 1, 3, 356, 280), // shared code
+            (4, 2, 0, 712, 160),                                                          // foundation
+        })
+        {
+            var start = html.IndexOf(NodeKey(id), StringComparison.Ordinal);
+            Assert.True(start >= 0, $"node {id} missing from the blob");
+            Assert.Contains($"\"col\":{col},\"row\":{row},\"x\":{x},\"y\":{y}", html.Substring(start, 200));
+        }
+        Assert.Contains("\"lay\":{\"W\":232,\"H\":62,\"w\":944,\"h\":342}", html);
+        Assert.Contains("<b>Entry points</b><span>3</span>", html);
+        Assert.Contains("<b>Shared code</b><span>4</span>", html);
+        Assert.Contains("<b>Foundation</b><span>1</span>", html);
+    }
+
+    [Fact]
+    public void A_dependency_cycle_still_lays_out()
+    {
+        var doc = new MapDocument
+        {
+            UserVersion = MapSchema.Version,
+            Projects = new[]
+            {
+                new ProjectRow(1, "A", "A.csproj", "net8.0", Kinds.Other),
+                new ProjectRow(2, "B", "B.csproj", "net8.0", Kinds.Other),
+            },
+            Edges = new[]
+            {
+                new EdgeRow(RefKinds.Project, 1, RefKinds.Project, 2, EdgeKinds.References, ""),
+                new EdgeRow(RefKinds.Project, 2, RefKinds.Project, 1, EdgeKinds.References, ""),
+            },
+        };
+        var html = ProjectMapBuilder.Build(doc);
+        Assert.Contains("\"name\":\"A\",\"short\":\"A\",\"kind\":\"other\",\"in\":1,\"out\":1,\"col\":0", html);
+        Assert.Contains("\"name\":\"B\",\"short\":\"B\",\"kind\":\"other\",\"in\":1,\"out\":1,\"col\":1", html);
     }
 
     [Fact]

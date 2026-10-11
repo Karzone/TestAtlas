@@ -92,7 +92,7 @@ near-misses to reuse instead:
 
 Live sample outputs, committed from that same solution:
 **[HTML report](https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-report.html)** (features, scenarios, bindings, class kinds, endpoints) ·
-**[dependency map](https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-map.html)** (the eight projects and their edges).
+**[dependency map](https://htmlpreview.github.io/?https://github.com/Karzone/TestAtlas/blob/main/docs/sample-map.html)** (the eight projects in layers — click one to see what it uses, what uses it, and which tests a change can reach).
 <sub>(GitHub serves `.html` as source, so the links route through htmlpreview.github.io — or download from [`docs/`](docs/) and open locally.)</sub>
 
 ## What you get
@@ -108,7 +108,7 @@ them — then turns that map into answers:
 | 💥 | **Impact** | Blast radius — the scenarios affected by changing a class, method, step, or endpoint |
 | 🔍 | **Search** | FTS5 over step definitions + scenarios — *"does a step for this already exist?"* |
 | 🔌 | **MCP** | All of it served to an AI agent over stdio — precise answers in a few hundred tokens, no context stuffing |
-| 📊 | **Report & map** | Self-contained HTML drill-down of the whole map + project-dependency graph |
+| 📊 | **Report & map** | Self-contained HTML drill-down of the whole map + a layered, searchable project-dependency graph |
 | 📈 | **Stats** | Entity counts, class-kind breakdown, binding coverage, diagnostics |
 
 All of it **offline, deterministic, and reproducible** — same input, same map, every time.
