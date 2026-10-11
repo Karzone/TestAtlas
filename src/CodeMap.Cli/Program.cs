@@ -254,7 +254,7 @@ public static class Commands
         string html;
         try
         {
-            html = HtmlReportBuilder.Build(doc);
+            html = HtmlReportBuilder.Build(doc, Environment.CurrentDirectory);
             File.WriteAllText(output, html);
         }
         catch (Exception ex)

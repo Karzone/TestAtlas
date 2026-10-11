@@ -57,6 +57,27 @@ public sealed class HtmlReportBuilderTests
     }
 
     [Fact]
+    public void Shows_the_solution_path_relative_to_the_base_directory()
+    {
+        var html = HtmlReportBuilder.Build(Doc(), "/repo");
+        Assert.Contains("<span title=\"My.sln\">My.sln</span>", html);
+        Assert.DoesNotContain("/repo/My.sln", html);
+
+        // No base directory: the path as recorded in the map, as before.
+        Assert.Contains("<span title=\"/repo/My.sln\">/repo/My.sln</span>", HtmlReportBuilder.Build(Doc()));
+    }
+
+    [Theory]
+    [InlineData("/repo/samples/Shop/Shop.sln", "/repo", "samples/Shop/Shop.sln")]
+    [InlineData("/repo/samples/Shop/Shop.sln", "/repo/", "samples/Shop/Shop.sln")]
+    [InlineData("/elsewhere/Shop.sln", "/repo", "/elsewhere/Shop.sln")]   // outside the base: unchanged
+    [InlineData("/repo/..x/Shop.sln", "/repo", "..x/Shop.sln")]          // a folder named "..x" is still inside
+    [InlineData("(unknown solution)", "/repo", "(unknown solution)")]    // not a path: unchanged
+    [InlineData("/repo/Shop.sln", null, "/repo/Shop.sln")]
+    public void Display_path_is_relative_only_under_the_base(string path, string? baseDirectory, string expected)
+        => Assert.Equal(expected, HtmlReportBuilder.DisplayPath(path, baseDirectory));
+
+    [Fact]
     public void Renders_each_binding_state_with_its_evidence()
     {
         var html = HtmlReportBuilder.Build(Doc());

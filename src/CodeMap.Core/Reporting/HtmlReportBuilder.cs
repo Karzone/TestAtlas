@@ -16,7 +16,13 @@ namespace TestAtlas.Core.Reporting;
 public static class HtmlReportBuilder
 {
     /// <summary>Builds the full HTML document as a string.</summary>
-    public static string Build(MapDocument doc)
+    /// <param name="doc">The map to render.</param>
+    /// <param name="baseDirectory">
+    /// When given, a solution path under this directory is shown relative to it (forward slashes), so a
+    /// committed report doesn't carry the machine-specific absolute path. A solution outside it, or no
+    /// base directory, shows the path as recorded in the map.
+    /// </param>
+    public static string Build(MapDocument doc, string? baseDirectory = null)
     {
         var sb = new StringBuilder(64 * 1024);
 
@@ -42,7 +48,7 @@ public static class HtmlReportBuilder
         var coveragePct = totalSteps == 0 ? 0 : (int)Math.Round(100.0 * resolved / totalSteps);
 
         // ---- document shell -----------------------------------------------------------------
-        var solutionPath = Meta(doc, MapSchema.MetaSolutionPath, "(unknown solution)");
+        var solutionPath = DisplayPath(Meta(doc, MapSchema.MetaSolutionPath, "(unknown solution)"), baseDirectory);
         var solutionName = Path.GetFileName(solutionPath);
         var generated = Meta(doc, MapSchema.MetaGeneratedUtc, "");
         var toolVersion = Meta(doc, MapSchema.MetaToolVersion, "");
@@ -615,6 +621,17 @@ public static class HtmlReportBuilder
         => sb.Append("<li><span class=\"swatch ").Append(cls).Append("\"></span><b>").Append(count)
              .Append("</b> <span class=\"lk\">").Append(cls).Append("</span> <span class=\"ld\">")
              .Append(E(desc)).Append("</span></li>");
+
+    /// <summary>The path relative to <paramref name="baseDirectory"/> when it lies under it; otherwise unchanged.</summary>
+    internal static string DisplayPath(string path, string? baseDirectory)
+    {
+        if (string.IsNullOrEmpty(baseDirectory) || !Path.IsPathFullyQualified(path)) return path;
+        var relative = Path.GetRelativePath(baseDirectory, path);
+        var outside = relative == ".." || relative.StartsWith("../", StringComparison.Ordinal)
+            || relative.StartsWith("..\\", StringComparison.Ordinal);
+        if (relative == "." || outside || Path.IsPathRooted(relative)) return path;
+        return relative.Replace('\\', '/');
+    }
 
     private static string Meta(MapDocument doc, string key, string fallback)
         => doc.Meta.TryGetValue(key, out var v) && v.Length > 0 ? v : fallback;
