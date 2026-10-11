@@ -64,4 +64,14 @@ jobs:
           version=$(grep -oP '(?<=<Version>)[^<]+' src/Directory.Build.props)
           sed "s/0\.0\.0-dev/${version}/g" src/CodeMap.Mcp/.mcp/server.json > server.publish.json
           ./mcp-publisher login github-oidc
-          ./mcp-publisher publish server.publish.json
+          # A version that is already registered (say, a release re-run after a manual run) is not
+          # an error: the registry answers 400 "cannot publish duplicate version". Anything else fails.
+          if ! out=$(./mcp-publisher publish server.publish.json 2>&1); then
+            echo "$out"
+            if grep -q "cannot publish duplicate version" <<<"$out"; then
+              echo "::notice::io.github.Karzone/TestAtlas.Mcp ${version} is already in the MCP Registry; nothing to publish."
+              exit 0
+            fi
+            exit 1
+          fi
+          echo "$out"
