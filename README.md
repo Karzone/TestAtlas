@@ -23,6 +23,7 @@
 
 <p align="center">
   <a href="https://glama.ai/mcp/servers/Karzone/TestAtlas"><img width="380" alt="TestAtlas on Glama: license, quality and maintenance grades" src="https://glama.ai/mcp/servers/Karzone/TestAtlas/badge"></a>
+  <a href="https://mcprush.com/to/testatlas-mcp?ref=badge"><img width="380" alt="TestAtlas MCP server on MCPRush" src="https://mcprush.com/badge/testatlas-mcp/card.svg"></a>
 </p>
 
 <p align="center">
